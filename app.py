@@ -544,7 +544,7 @@ class BetPlayScraper:
         }
 
 # ============================================================
-# ANALIZADOR CON IA (CON/SIN SKLEARN)
+# ANALIZADOR CON IA
 # ============================================================
 
 class BettingAnalyzer:
@@ -1017,6 +1017,246 @@ def initialize_system():
         return True
         
     except Exception as e:
+        logger.error(f"❌ Error crítico en inicialización: {e}")
+        CACHE['initialization_complete'] = False
+        return False
+
+def update_betting_data():
+    """Actualización principal de datos"""
+    global scraper, analyzer
+    
+    if not scraper or not analyzer:
+        logger.error("❌ Sistema no inicializado")
+        return False
+    
+    try:
+        update_start_time = time.time()
+        logger.info("🔄 Iniciando actualización de datos...")
+        
+        # Scraping de partidos
+        logger.info("📥 Obteniendo partidos...")
+        matches = scraper.scrape_soccer_matches()
+        
+        if not matches:
+            logger.warning("⚠️  No se obtuvieron partidos")
+            return False
+        
+        logger.info(f"✅ {len(matches)} partidos obtenidos")
+        
+        # Análisis de partidos
+        logger.info("🧠 Analizando partidos...")
+        analyzed_matches = []
+        analysis_errors = 0
+        
+        for i, match in enumerate(matches):
+            try:
+                logger.info(f"Analizando {i+1}/{len(matches)}: {match['home_team']} vs {match['away_team']}")
+                analysis = analyzer.analyze_match(match)
+                match['analysis'] = analysis
+                analyzed_matches.append(match)
+                
+            except Exception as e:
+                analysis_errors += 1
+                logger.error(f"❌ Error analizando partido {match.get('id', 'N/A')}: {e}")
+                # Continúar con el siguiente partido
+                continue
+        
+        # Actualizar cache
+        CACHE['scraped_data'] = matches
+        CACHE['analysis_results'] = analyzed_matches
+        CACHE['last_update'] = datetime.now()
+        CACHE['error_count'] = analysis_errors
+        
+        update_duration = time.time() - update_start_time
+        
+        logger.info(f"✅ Actualización completada en {update_duration:.2f}s")
+        logger.info(f"📊 Partidos analizados: {len(analyzed_matches)}/{len(matches)}")
+        if analysis_errors > 0:
+            logger.warning(f"⚠️  Errores de análisis: {analysis_errors}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error crítico en actualización: {e}")
+        CACHE['error_count'] += 1
+        return False
+
+def should_update_data():
+    """Verifica si se debe actualizar los datos"""
+    if not CACHE.get('last_update'):
+        return True
+    
+    time_diff = datetime.now() - CACHE['last_update']
+    return time_diff.total_seconds() > CACHE['update_frequency']
+
+# ============================================================
+# ENDPOINTS DE LA API REST
+# ============================================================
+
+@app.route('/')
+def dashboard():
+    """Dashboard principal mejorado"""
+    try:
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        matches_count = len(CACHE.get('analysis_results', []))
+        scraped_count = len(CACHE.get('scraped_data', []))
+        
+        status = "✅ OPERATIVO" if CACHE.get('initialization_complete') else "🔄 INICIALIZANDO"
+        
+        last_update = CACHE.get('last_update')
+        if last_update:
+            last_update_str = last_update.strftime('%Y-%m-%d %H:%M:%S')
+            time_since_update = datetime.now() - last_update
+            hours_since = int(time_since_update.total_seconds() / 3600)
+        else:
+            last_update_str = "Nunca"
+            hours_since = 999
+        
+        sklearn_status = "✅ Activo" if SKLEARN_AVAILABLE else "⚠️  No disponible"
+        error_count = CACHE.get('error_count', 0)
+        
+        return f"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>🎯 BetPlay Colombia - Sistema de Análisis IA</title>
+            <style>
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                body {{ 
+                    background: linear-gradient(135deg, #0a0e27, #1a1f3a, #2a2f4a); 
+                    color: white; 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    min-height: 100vh;
+                    padding: 20px;
+                }}
+                .container {{ max-width: 1200px; margin: 0 auto; }}
+                .header {{ 
+                    text-align: center; 
+                    background: linear-gradient(135deg, #ff6b35, #f7931e, #ff8c42); 
+                    padding: 40px; 
+                    border-radius: 20px; 
+                    margin-bottom: 30px;
+                    box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
+                }}
+                .header h1 {{ font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
+                .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }}
+                .stat-card {{ 
+                    background: rgba(45,53,97,0.9); 
+                    padding: 25px; 
+                    border-radius: 15px; 
+                    border-left: 5px solid #00ff88;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                    transition: transform 0.3s ease;
+                }}
+                .stat-card:hover {{ transform: translateY(-5px); }}
+                .stat-value {{ font-size: 2.2em; color: #00ff88; margin: 15px 0; font-weight: bold; }}
+                .stat-label {{ font-size: 1.1em; opacity: 0.8; }}
+                .endpoint-section {{ 
+                    background: rgba(45,53,97,0.8); 
+                    padding: 30px; 
+                    border-radius: 15px; 
+                    margin: 20px 0; 
+                    border-left: 6px solid #ff6b35;
+                }}
+                .endpoint {{ 
+                    background: rgba(255,255,255,0.1); 
+                    padding: 15px; 
+                    margin: 10px 0; 
+                    border-radius: 8px; 
+                    border-left: 3px solid #00ff88;
+                    font-family: 'Courier New', monospace;
+                }}
+                .features-list {{ list-style: none; }}
+                .features-list li {{ 
+                    padding: 8px 0; 
+                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                    position: relative;
+                    padding-left: 25px;
+                }}
+                .features-list li::before {{ 
+                    content: '🚀'; 
+                    position: absolute; 
+                    left: 0;
+                }}
+                .status-indicator {{ 
+                    display: inline-block; 
+                    padding: 5px 15px; 
+                    border-radius: 20px; 
+                    background: rgba(0,255,136,0.2); 
+                    border: 1px solid #00ff88;
+                    margin: 5px 0;
+                }}
+                .warning {{ background: rgba(255,193,7,0.2); border-color: #ffc107; }}
+                .error {{ background: rgba(220,53,69,0.2); border-color: #dc3545; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🎯 BetPlay Colombia</h1>
+                    <p>Sistema Avanzado de Análisis Deportivo con Inteligencia Artificial</p>
+                    <p>Version 2.1 - Optimizado para Render</p>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Estado del Sistema</div>
+                        <div class="stat-value">{status}</div>
+                        <div class="status-indicator {'warning' if error_count > 0 else ''}">
+                            Errores: {error_count}
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-label">Partidos Analizados</div>
+                        <div class="stat-value">{matches_count}</div>
+                        <div class="stat-label">Partidos obtenidos: {scraped_count}</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-label">Última Actualización</div>
+                        <div class="stat-value">{last_update_str}</div>
+                        <div class="stat-label">Hace {hours_since} horas</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-label">Machine Learning</div>
+                        <div class="stat-value">{sklearn_status}</div>
+                        <div class="stat-label">Sistema: {current_time}</div>
+                    </div>
+                </div>
+                
+                <div class="endpoint-section">
+                    <h3>📡 API Endpoints Disponibles</h3>
+                    <div class="endpoint">
+                        <strong>GET /api/matches</strong><br>
+                        Obtiene todos los partidos con análisis completo
+                    </div>
+                    <div class="endpoint">
+                        <strong>GET /api/analysis</strong><br>
+                        Resumen estadístico y mejores oportunidades
+                    </div>
+                    <div class="endpoint">
+                        <strong>GET /api/recommendations</strong><br>
+                        Recomendaciones de apuestas con mayor valor
+                    </div>
+                    <div class="endpoint">
+                        <strong>POST /api/update</strong><br>
+                        Fuerza actualización manual de datos
+                    </div>
+                    <div class="endpoint">
+                        <strong>GET /health</strong><br>
+                        Estado detallado del sistema
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+            except Exception as e:
         logger.error(f"Error en dashboard: {e}")
         return f"<h1>Error en Dashboard: {str(e)}</h1>", 500
 
@@ -1355,21 +1595,6 @@ def health_check():
         else:
             data_metrics['hours_since_update'] = None
         
-        # Métricas de rendimiento
-        if CACHE.get('analysis_results'):
-            analyses = [m.get('analysis', {}) for m in CACHE['analysis_results'] if 'analysis' in m]
-            if analyses:
-                confidences = [a.get('confidence', 0) for a in analyses]
-                performance_metrics = {
-                    'average_confidence': round(sum(confidences) / len(confidences), 1),
-                    'high_confidence_matches': len([c for c in confidences if c >= 75]),
-                    'analysis_success_rate': f"{len(analyses)/len(CACHE['analysis_results'])*100:.1f}%"
-                }
-            else:
-                performance_metrics = {'message': 'No analysis data available'}
-        else:
-            performance_metrics = {'message': 'No matches available'}
-        
         # Estado general
         overall_status = 'healthy'
         if not CACHE.get('initialization_complete'):
@@ -1383,85 +1608,18 @@ def health_check():
             'status': overall_status,
             'system': system_info,
             'components': components,
-            'data': data_metrics,
-            'performance': performance_metrics,
-            'configuration': {
-                'update_frequency_hours': CACHE['update_frequency'] / 3600,
-                'sklearn_enabled': SKLEARN_AVAILABLE,
-                'betplay_base_url': BETPLAY_CONFIG['base_url'],
-                'timeout_seconds': BETPLAY_CONFIG['timeout']
-            }
+            'data': data_metrics
         }
         
         # Código de estado HTTP basado en el estado general
         status_code = 200
         if overall_status == 'initializing':
             status_code = 503
-        elif overall_status in ['degraded', 'warning']:
-            status_code = 200  # Funcionando pero con advertencias
         
         return jsonify(response), status_code
         
     except Exception as e:
         logger.error(f"Error en health check: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-@app.route('/api/stats')
-def get_system_stats():
-    """Endpoint para estadísticas del sistema"""
-    try:
-        current_time = datetime.now()
-        
-        # Estadísticas básicas
-        basic_stats = {
-            'total_matches': len(CACHE.get('scraped_data', [])),
-            'analyzed_matches': len(CACHE.get('analysis_results', [])),
-            'system_uptime_hours': round((current_time - CACHE['system_start_time']).total_seconds() / 3600, 2),
-            'last_update': CACHE.get('last_update').isoformat() if CACHE.get('last_update') else None
-        }
-        
-        # Estadísticas de ligas
-        matches = CACHE.get('analysis_results', [])
-        league_stats = {}
-        confidence_by_league = {}
-        
-        for match in matches:
-            league = match.get('league', 'Desconocida')
-            
-            # Contar por liga
-            league_stats[league] = league_stats.get(league, 0) + 1
-            
-            # Confianza por liga
-            if 'analysis' in match:
-                confidence = match['analysis'].get('confidence', 0)
-                if league not in confidence_by_league:
-                    confidence_by_league[league] = []
-                confidence_by_league[league].append(confidence)
-        
-        # Promediar confianza por liga
-        avg_confidence_by_league = {}
-        for league, confidences in confidence_by_league.items():
-            avg_confidence_by_league[league] = round(sum(confidences) / len(confidences), 1) if confidences else 0
-        
-        return jsonify({
-            'status': 'success',
-            'timestamp': current_time.isoformat(),
-            'basic_stats': basic_stats,
-            'league_distribution': league_stats,
-            'confidence_by_league': avg_confidence_by_league,
-            'system_info': {
-                'sklearn_available': SKLEARN_AVAILABLE,
-                'error_count': CACHE.get('error_count', 0),
-                'initialization_complete': CACHE.get('initialization_complete', False)
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"Error en /api/stats: {e}")
         return jsonify({
             'status': 'error',
             'message': str(e),
@@ -1488,6 +1646,27 @@ def schedule_automatic_updates():
     logger.info("✅ Scheduler iniciado en hilo separado")
 
 # ============================================================
+# MANEJO DE ERRORES
+# ============================================================
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        'status': 'error',
+        'message': 'Endpoint no encontrado',
+        'timestamp': datetime.now().isoformat()
+    }), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"Error interno del servidor: {error}")
+    return jsonify({
+        'status': 'error',
+        'message': 'Error interno del servidor',
+        'timestamp': datetime.now().isoformat()
+    }), 500
+
+# ============================================================
 # INICIALIZACIÓN Y PUNTO DE ENTRADA
 # ============================================================
 
@@ -1510,24 +1689,6 @@ def startup_sequence():
     else:
         logger.error("❌ Error en inicialización")
         return False
-
-# Manejo de errores globales
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({
-        'status': 'error',
-        'message': 'Endpoint no encontrado',
-        'timestamp': datetime.now().isoformat()
-    }), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    logger.error(f"Error interno del servidor: {error}")
-    return jsonify({
-        'status': 'error',
-        'message': 'Error interno del servidor',
-        'timestamp': datetime.now().isoformat()
-    }), 500
 
 # ============================================================
 # PUNTO DE ENTRADA PRINCIPAL
@@ -1557,268 +1718,4 @@ if __name__ == '__main__':
             
     except Exception as e:
         logger.error(f"❌ Error crítico en punto de entrada: {e}")
-        sys.exit(1) Exception as e:
-        logger.error(f"❌ Error crítico en inicialización: {e}")
-        CACHE['initialization_complete'] = False
-        return False
-
-def update_betting_data():
-    """Actualización principal de datos"""
-    global scraper, analyzer
-    
-    if not scraper or not analyzer:
-        logger.error("❌ Sistema no inicializado")
-        return False
-    
-    try:
-        update_start_time = time.time()
-        logger.info("🔄 Iniciando actualización de datos...")
-        
-        # Scraping de partidos
-        logger.info("📥 Obteniendo partidos...")
-        matches = scraper.scrape_soccer_matches()
-        
-        if not matches:
-            logger.warning("⚠️  No se obtuvieron partidos")
-            return False
-        
-        logger.info(f"✅ {len(matches)} partidos obtenidos")
-        
-        # Análisis de partidos
-        logger.info("🧠 Analizando partidos...")
-        analyzed_matches = []
-        analysis_errors = 0
-        
-        for i, match in enumerate(matches):
-            try:
-                logger.info(f"Analizando {i+1}/{len(matches)}: {match['home_team']} vs {match['away_team']}")
-                analysis = analyzer.analyze_match(match)
-                match['analysis'] = analysis
-                analyzed_matches.append(match)
-                
-            except Exception as e:
-                analysis_errors += 1
-                logger.error(f"❌ Error analizando partido {match.get('id', 'N/A')}: {e}")
-                # Continúar con el siguiente partido
-                continue
-        
-        # Actualizar cache
-        CACHE['scraped_data'] = matches
-        CACHE['analysis_results'] = analyzed_matches
-        CACHE['last_update'] = datetime.now()
-        CACHE['error_count'] = analysis_errors
-        
-        update_duration = time.time() - update_start_time
-        
-        logger.info(f"✅ Actualización completada en {update_duration:.2f}s")
-        logger.info(f"📊 Partidos analizados: {len(analyzed_matches)}/{len(matches)}")
-        if analysis_errors > 0:
-            logger.warning(f"⚠️  Errores de análisis: {analysis_errors}")
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Error crítico en actualización: {e}")
-        CACHE['error_count'] += 1
-        return False
-
-def should_update_data():
-    """Verifica si se debe actualizar los datos"""
-    if not CACHE.get('last_update'):
-        return True
-    
-    time_diff = datetime.now() - CACHE['last_update']
-    return time_diff.total_seconds() > CACHE['update_frequency']
-
-# ============================================================
-# ENDPOINTS DE LA API REST
-# ============================================================
-
-@app.route('/')
-def dashboard():
-    """Dashboard principal mejorado"""
-    try:
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        matches_count = len(CACHE.get('analysis_results', []))
-        scraped_count = len(CACHE.get('scraped_data', []))
-        
-        status = "✅ OPERATIVO" if CACHE.get('initialization_complete') else "🔄 INICIALIZANDO"
-        
-        last_update = CACHE.get('last_update')
-        if last_update:
-            last_update_str = last_update.strftime('%Y-%m-%d %H:%M:%S')
-            time_since_update = datetime.now() - last_update
-            hours_since = int(time_since_update.total_seconds() / 3600)
-        else:
-            last_update_str = "Nunca"
-            hours_since = 999
-        
-        sklearn_status = "✅ Activo" if SKLEARN_AVAILABLE else "⚠️  No disponible"
-        error_count = CACHE.get('error_count', 0)
-        
-        return f"""
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>🎯 BetPlay Colombia - Sistema de Análisis IA</title>
-            <style>
-                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-                body {{ 
-                    background: linear-gradient(135deg, #0a0e27, #1a1f3a, #2a2f4a); 
-                    color: white; 
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                    min-height: 100vh;
-                    padding: 20px;
-                }}
-                .container {{ max-width: 1200px; margin: 0 auto; }}
-                .header {{ 
-                    text-align: center; 
-                    background: linear-gradient(135deg, #ff6b35, #f7931e, #ff8c42); 
-                    padding: 40px; 
-                    border-radius: 20px; 
-                    margin-bottom: 30px;
-                    box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
-                }}
-                .header h1 {{ font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
-                .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }}
-                .stat-card {{ 
-                    background: rgba(45,53,97,0.9); 
-                    padding: 25px; 
-                    border-radius: 15px; 
-                    border-left: 5px solid #00ff88;
-                    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-                    transition: transform 0.3s ease;
-                }}
-                .stat-card:hover {{ transform: translateY(-5px); }}
-                .stat-value {{ font-size: 2.2em; color: #00ff88; margin: 15px 0; font-weight: bold; }}
-                .stat-label {{ font-size: 1.1em; opacity: 0.8; }}
-                .endpoint-section {{ 
-                    background: rgba(45,53,97,0.8); 
-                    padding: 30px; 
-                    border-radius: 15px; 
-                    margin: 20px 0; 
-                    border-left: 6px solid #ff6b35;
-                }}
-                .endpoint {{ 
-                    background: rgba(255,255,255,0.1); 
-                    padding: 15px; 
-                    margin: 10px 0; 
-                    border-radius: 8px; 
-                    border-left: 3px solid #00ff88;
-                    font-family: 'Courier New', monospace;
-                }}
-                .features-list {{ list-style: none; }}
-                .features-list li {{ 
-                    padding: 8px 0; 
-                    border-bottom: 1px solid rgba(255,255,255,0.1);
-                    position: relative;
-                    padding-left: 25px;
-                }}
-                .features-list li::before {{ 
-                    content: '🚀'; 
-                    position: absolute; 
-                    left: 0;
-                }}
-                .status-indicator {{ 
-                    display: inline-block; 
-                    padding: 5px 15px; 
-                    border-radius: 20px; 
-                    background: rgba(0,255,136,0.2); 
-                    border: 1px solid #00ff88;
-                    margin: 5px 0;
-                }}
-                .warning {{ background: rgba(255,193,7,0.2); border-color: #ffc107; }}
-                .error {{ background: rgba(220,53,69,0.2); border-color: #dc3545; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🎯 BetPlay Colombia</h1>
-                    <p>Sistema Avanzado de Análisis Deportivo con Inteligencia Artificial</p>
-                    <p>Version 2.1 - Optimizado para Render</p>
-                </div>
-                
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Estado del Sistema</div>
-                        <div class="stat-value">{status}</div>
-                        <div class="status-indicator {'warning' if error_count > 0 else ''}">
-                            Errores: {error_count}
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-label">Partidos Analizados</div>
-                        <div class="stat-value">{matches_count}</div>
-                        <div class="stat-label">Partidos obtenidos: {scraped_count}</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-label">Última Actualización</div>
-                        <div class="stat-value">{last_update_str}</div>
-                        <div class="stat-label">Hace {hours_since} horas</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-label">Machine Learning</div>
-                        <div class="stat-value">{sklearn_status}</div>
-                        <div class="stat-label">Sistema: {current_time}</div>
-                    </div>
-                </div>
-                
-                <div class="endpoint-section">
-                    <h3>📡 API Endpoints Disponibles</h3>
-                    <div class="endpoint">
-                        <strong>GET /api/matches</strong><br>
-                        Obtiene todos los partidos con análisis completo
-                    </div>
-                    <div class="endpoint">
-                        <strong>GET /api/analysis</strong><br>
-                        Resumen estadístico y mejores oportunidades
-                    </div>
-                    <div class="endpoint">
-                        <strong>GET /api/recommendations</strong><br>
-                        Recomendaciones de apuestas con mayor valor
-                    </div>
-                    <div class="endpoint">
-                        <strong>POST /api/update</strong><br>
-                        Fuerza actualización manual de datos
-                    </div>
-                    <div class="endpoint">
-                        <strong>GET /health</strong><br>
-                        Estado detallado del sistema
-                    </div>
-                </div>
-                
-                <div class="endpoint-section">
-                    <h3>🔧 Características del Sistema</h3>
-                    <ul class="features-list">
-                        <li>Scraping automatizado de BetPlay.com.co</li>
-                        <li>Análisis con Machine Learning (RandomForest + GradientBoosting)</li>
-                        <li>Base de datos de estadísticas de equipos</li>
-                        <li>Identificación automática de apuestas de valor</li>
-                        <li>Análisis de confianza y gestión de riesgo</li>
-                        <li>Actualizaciones automáticas cada 3 horas</li>
-                        <li>API REST completa con formato JSON</li>
-                        <li>Fallback inteligente sin dependencias</li>
-                        <li>Optimizado para deployment en Render</li>
-                        <li>Soporte para múltiples ligas internacionales</li>
-                    </ul>
-                </div>
-                
-                <div class="endpoint-section">
-                    <h3>📈 Métricas de Rendimiento</h3>
-                    <p><strong>Tiempo de respuesta:</strong> < 2 segundos promedio</p>
-                    <p><strong>Precisión de análisis:</strong> 78-85% según histórico</p>
-                    <p><strong>Cobertura:</strong> Liga BetPlay + Ligas Europeas principales</p>
-                    <p><strong>Disponibilidad:</strong> 99.5% uptime objetivo</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-    except
+        sys.exit(1)
