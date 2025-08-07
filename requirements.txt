@@ -1,11 +1,25 @@
-Flask==3.0.0
-Flask-CORS==4.0.0
+
+# BETPLAY COLOMBIA - REQUISITOS OPTIMIZADOS PARA RENDER
+# ====================================================
+# Versión actualizada sin problemas de compilación
+
+# Framework web
+Flask==3.0.3
+Flask-CORS==4.0.1
+
+# HTTP y web scraping
 requests==2.31.0
 beautifulsoup4==4.12.2
-pandas==2.2.0
-numpy==1.26.0
-scikit-learn==1.4.0
+
+# Análisis de datos - VERSION COMPATIBLE
+pandas==2.0.3
+
+# Machine Learning
+scikit-learn==1.3.2
+numpy==1.24.4
+
+# Tareas programadas
 schedule==1.2.0
-lxml==5.1.0
-html5lib==1.1
-gunicorn==21.2.0
+
+# Opcional: Acelerar parsing HTML
+lxml==4.9.3
