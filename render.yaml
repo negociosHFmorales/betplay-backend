@@ -1,22 +1,19 @@
-# render.yaml - Configuración para Render.com
+# render.yaml - Configuración específica para Render
 services:
   - type: web
     name: betplay-backend
     runtime: python3
     buildCommand: |
-      echo "Instalando dependencias..."
+      echo "🚀 Instalando dependencias para BetPlay Backend..."
       pip install --upgrade pip setuptools wheel
       pip install -r requirements.txt
     startCommand: python app.py
+    env: python3
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11"  # Cambiar a versión más estable
+        value: "3.13.4"
       - key: PORT
-        fromService: # Render asignará automáticamente
-      - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: DISABLE_COLLECTSTATIC
-        value: "1"
-    plan: free  # o el plan que prefieras
-    region: oregon  # o tu región preferida
-    branch: main
+        value: "10000"
+    scaling:
+      minInstances: 1
+      maxInstances: 1
