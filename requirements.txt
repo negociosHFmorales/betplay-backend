@@ -8,5 +8,4 @@ scikit-learn==1.4.0
 schedule==1.2.0
 lxml==5.1.0
 html5lib==1.1
-Werkzeug==3.0.1
 gunicorn==21.2.0
