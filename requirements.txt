@@ -1,24 +1,9 @@
-# BETPLAY BACKEND - SOLUCIÓN PARA PYTHON 3.13
-# ====================================================
-# Versiones COMPATIBLES con Python 3.13
-
 Flask==3.0.3
 Flask-CORS==4.0.1
 requests==2.31.0
 beautifulsoup4==4.12.2
-
-# PANDAS COMPATIBLE CON PYTHON 3.13
 pandas==2.2.3
-
-# NUMPY COMPATIBLE 
-numpy>=1.26.0,<3.0.0
-
-# ANÁLISIS ESTADÍSTICO (OPCIONAL - FUNCIONA SIN ESTO)
-# scikit-learn>=1.4.0  # Desactivado temporalmente
-
-# UTILITIES
+numpy>=1.26.0
 schedule==1.2.2
 python-dateutil==2.9.0
-
-# SERVIDOR WSGI PARA RENDER
 gunicorn==22.0.0
