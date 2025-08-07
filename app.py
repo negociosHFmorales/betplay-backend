@@ -1,4 +1,428 @@
-# BETPLAY COLOMBIA - SCRAPER & ANALYZER BACKEND V2.1
+@app.route('/api/analysis')
+def get_analysis():
+    """Endpoint para análisis estadístico avanzado"""
+    try:
+        matches = CACHE.get('analysis_results', [])
+        
+        if not matches:
+            return jsonify({
+                'status': 'warning', 
+                'message': 'No hay datos disponibles para análisis',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        # Extraer análisis
+        analyses = [m.get('analysis', {}) for m in matches if 'analysis' in m]
+        
+        if not analyses:
+            return jsonify({
+                'status': 'warning',
+                'message': 'No hay análisis disponibles',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        # Estadísticas generales
+        confidences = [a.get('confidence', 0) for a in analyses]
+        expected_values = [a.get('expected_value', 0) for a in analyses]
+        recommendations = [a.get('recommendation', '') for a in analyses]
+        
+        # Calcular métricas
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+        high_confidence = len([c for c in confidences if c >= 75])
+        medium_confidence = len([c for c in confidences if 60 <= c < 75])
+        low_confidence = len([c for c in confidences if c < 60])
+        
+        positive_value = len([ev for ev in expected_values if ev > 0])
+        avg_expected_value = sum([ev for ev in expected_values if ev > 0]) / len([ev for ev in expected_values if ev > 0]) if any(ev > 0 for ev in expected_values) else 0
+        
+        # Distribución de recomendaciones
+        rec_distribution = {
+            'home': recommendations.count('home'),
+            'draw': recommendations.count('draw'),
+            'away': recommendations.count('away')
+        }
+        
+        # Mejores oportunidades
+        valid_matches = [m for m in matches if 'analysis' in m and m['analysis'].get('expected_value', 0) > 0]
+        best_opportunities = sorted(
+            valid_matches,
+            key=lambda x: x['analysis']['confidence'] * (1 + x['analysis']['expected_value']) * 100,
+            reverse=True
+        )[:10]
+        
+        # Análisis por liga
+        league_analysis = {}
+        for match in matches:
+            league = match.get('league', 'Desconocida')
+            if league not in league_analysis:
+                league_analysis[league] = {
+                    'matches': 0,
+                    'avg_confidence': 0,
+                    'total_confidence': 0
+                }
+            league_analysis[league]['matches'] += 1
+            if 'analysis' in match:
+                league_analysis[league]['total_confidence'] += match['analysis'].get('confidence', 0)
+        
+        for league, data in league_analysis.items():
+            if data['matches'] > 0:
+                data['avg_confidence'] = round(data['total_confidence'] / data['matches'], 1)
+            del data['total_confidence']  # Limpiar dato temporal
+        
+        response = {
+            'status': 'success',
+            'timestamp': datetime.now().isoformat(),
+            'summary': {
+                'total_matches': len(matches),
+                'analyzed_matches': len(analyses),
+                'average_confidence': round(avg_confidence, 1),
+                'confidence_distribution': {
+                    'high': high_confidence,
+                    'medium': medium_confidence,
+                    'low': low_confidence
+                },
+                'positive_expected_value': positive_value,
+                'average_expected_value': round(avg_expected_value, 3),
+                'recommendation_distribution': rec_distribution,
+                'last_update': CACHE.get('last_update').isoformat() if CACHE.get('last_update') else None
+            },
+            'best_opportunities': [
+                {
+                    'match': f"{m['home_team']} vs {m['away_team']}",
+                    'league': m.get('league', ''),
+                    'confidence': m['analysis']['confidence'],
+                    'expected_value': m['analysis']['expected_value'],
+                    'recommendation': m['analysis']['recommendation'],
+                    'risk_level': m['analysis'].get('risk_level', 'MEDIO'),
+                    'win_probability': m['analysis'].get('win_probability', 0)
+                } for m in best_opportunities
+            ],
+            'league_analysis': league_analysis,
+            'system_info': {
+                'sklearn_available': SKLEARN_AVAILABLE,
+                'analysis_type': 'ML' if SKLEARN_AVAILABLE else 'Statistical'
+            }
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error en /api/analysis: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/recommendations')
+def get_recommendations():
+    """Endpoint para mejores recomendaciones de apuesta"""
+    try:
+        matches = CACHE.get('analysis_results', [])
+        valid_matches = [m for m in matches if 'analysis' in m]
+        
+        if not valid_matches:
+            return jsonify({
+                'status': 'warning',
+                'message': 'No hay recomendaciones disponibles',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        # Filtrar mejores apuestas (criterios estrictos)
+        premium_bets = []
+        good_bets = []
+        moderate_bets = []
+        
+        for match in valid_matches:
+            analysis = match['analysis']
+            confidence = analysis.get('confidence', 0)
+            expected_value = analysis.get('expected_value', 0)
+            risk_level = analysis.get('risk_level', 'ALTO')
+            
+            bet_data = {
+                'match': f"{match['home_team']} vs {match['away_team']}",
+                'league': match.get('league', ''),
+                'date': match.get('date', ''),
+                'time': match.get('time', ''),
+                'recommendation': f"Apostar por {analysis['recommendation']}",
+                'confidence': confidence,
+                'expected_value': expected_value,
+                'win_probability': analysis.get('win_probability', 0),
+                'reasons': analysis.get('reasons', []),
+                'risk_level': risk_level,
+                'analysis_type': analysis.get('analysis_type', 'Statistical'),
+                'score': confidence * (1 + expected_value) * 100  # Score combinado
+            }
+            
+            # Categorizar apuestas
+            if confidence >= 80 and expected_value > 0.08 and risk_level in ['BAJO', 'MEDIO-BAJO']:
+                premium_bets.append(bet_data)
+            elif confidence >= 70 and expected_value > 0.05:
+                good_bets.append(bet_data)
+            elif confidence >= 60 and expected_value > 0.02:
+                moderate_bets.append(bet_data)
+        
+        # Ordenar por score
+        premium_bets.sort(key=lambda x: x['score'], reverse=True)
+        good_bets.sort(key=lambda x: x['score'], reverse=True)
+        moderate_bets.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Limitar resultados
+        premium_bets = premium_bets[:5]
+        good_bets = good_bets[:8]
+        moderate_bets = moderate_bets[:10]
+        
+        # Todas las recomendaciones ordenadas por score
+        all_recommendations = premium_bets + good_bets + moderate_bets
+        all_recommendations.sort(key=lambda x: x['score'], reverse=True)
+        
+        response = {
+            'status': 'success',
+            'timestamp': datetime.now().isoformat(),
+            'summary': {
+                'total_matches_analyzed': len(valid_matches),
+                'premium_opportunities': len(premium_bets),
+                'good_opportunities': len(good_bets),
+                'moderate_opportunities': len(moderate_bets),
+                'recommendation_criteria': {
+                    'premium': 'Confianza ≥80%, Valor esperado >8%, Riesgo bajo',
+                    'good': 'Confianza ≥70%, Valor esperado >5%',
+                    'moderate': 'Confianza ≥60%, Valor esperado >2%'
+                }
+            },
+            'recommendations': {
+                'premium': premium_bets,
+                'good': good_bets,
+                'moderate': moderate_bets,
+                'all': all_recommendations[:15]  # Top 15 general
+            }
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error en /api/recommendations: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/update', methods=['POST'])
+def force_update():
+    """Endpoint para forzar actualización manual"""
+    try:
+        # Verificar si el sistema está inicializado
+        if not CACHE.get('initialization_complete'):
+            return jsonify({
+                'status': 'error',
+                'message': 'Sistema no inicializado completamente',
+                'timestamp': datetime.now().isoformat()
+            }), 503
+        
+        logger.info("🔄 Actualización manual solicitada")
+        start_time = time.time()
+        
+        # Realizar actualización
+        success = update_betting_data()
+        duration = time.time() - start_time
+        
+        if success:
+            matches_analyzed = len(CACHE.get('analysis_results', []))
+            matches_scraped = len(CACHE.get('scraped_data', []))
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Actualización completada en {duration:.2f} segundos',
+                'data': {
+                    'matches_scraped': matches_scraped,
+                    'matches_analyzed': matches_analyzed,
+                    'success_rate': f"{(matches_analyzed/matches_scraped*100):.1f}%" if matches_scraped > 0 else "0%",
+                    'error_count': CACHE.get('error_count', 0)
+                },
+                'timestamp': datetime.now().isoformat(),
+                'next_auto_update': (datetime.now() + timedelta(seconds=CACHE['update_frequency'])).isoformat()
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Error durante la actualización',
+                'duration': f"{duration:.2f} segundos",
+                'timestamp': datetime.now().isoformat()
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error en actualización manual: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error inesperado: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/health')
+def health_check():
+    """Endpoint de health check detallado"""
+    try:
+        current_time = datetime.now()
+        
+        # Información del sistema
+        system_info = {
+            'status': 'healthy' if CACHE.get('initialization_complete') else 'initializing',
+            'timestamp': current_time.isoformat(),
+            'uptime_seconds': int((current_time - CACHE['system_start_time']).total_seconds()),
+            'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            'port': PORT
+        }
+        
+        # Estado de componentes
+        components = {
+            'scraper': 'ok' if scraper else 'not_initialized',
+            'analyzer': 'ok' if analyzer else 'not_initialized',
+            'sklearn': 'available' if SKLEARN_AVAILABLE else 'not_available',
+            'cache': 'ok',
+            'api': 'ok'
+        }
+        
+        # Métricas de datos
+        data_metrics = {
+            'scraped_matches': len(CACHE.get('scraped_data', [])),
+            'analyzed_matches': len(CACHE.get('analysis_results', [])),
+            'last_update': CACHE.get('last_update').isoformat() if CACHE.get('last_update') else None,
+            'error_count': CACHE.get('error_count', 0),
+            'needs_update': should_update_data()
+        }
+        
+        # Calcular tiempo desde última actualización
+        if CACHE.get('last_update'):
+            time_since_update = current_time - CACHE['last_update']
+            data_metrics['hours_since_update'] = round(time_since_update.total_seconds() / 3600, 2)
+        else:
+            data_metrics['hours_since_update'] = None
+        
+        # Estado general
+        overall_status = 'healthy'
+        if not CACHE.get('initialization_complete'):
+            overall_status = 'initializing'
+        elif CACHE.get('error_count', 0) > 5:
+            overall_status = 'degraded'
+        elif not CACHE.get('analysis_results'):
+            overall_status = 'warning'
+        
+        response = {
+            'status': overall_status,
+            'system': system_info,
+            'components': components,
+            'data': data_metrics
+        }
+        
+        # Código de estado HTTP basado en el estado general
+        status_code = 200
+        if overall_status == 'initializing':
+            status_code = 503
+        
+        return jsonify(response), status_code
+        
+    except Exception as e:
+        logger.error(f"Error en health check: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+# ============================================================
+# SCHEDULER Y TAREAS AUTOMÁTICAS
+# ============================================================
+
+def schedule_automatic_updates():
+    """Configura actualizaciones automáticas"""
+    schedule.every(3).hours.do(update_betting_data)
+    logger.info("📅 Actualizaciones automáticas programadas cada 3 horas")
+    
+    def run_scheduler():
+        while True:
+            schedule.run_pending()
+            time.sleep(60)  # Verificar cada minuto
+    
+    # Ejecutar scheduler en hilo separado
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
+    logger.info("✅ Scheduler iniciado en hilo separado")
+
+# ============================================================
+# MANEJO DE ERRORES
+# ============================================================
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        'status': 'error',
+        'message': 'Endpoint no encontrado',
+        'timestamp': datetime.now().isoformat()
+    }), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"Error interno del servidor: {error}")
+    return jsonify({
+        'status': 'error',
+        'message': 'Error interno del servidor',
+        'timestamp': datetime.now().isoformat()
+    }), 500
+
+# ============================================================
+# INICIALIZACIÓN Y PUNTO DE ENTRADA
+# ============================================================
+
+def startup_sequence():
+    """Secuencia de inicio del sistema"""
+    logger.info("🌟 Iniciando BetPlay Colombia - Sistema de Análisis IA")
+    logger.info(f"🐍 Python {sys.version}")
+    logger.info(f"🔢 Puerto: {PORT}")
+    logger.info(f"🧠 Sklearn disponible: {SKLEARN_AVAILABLE}")
+    
+    # Inicializar sistema
+    success = initialize_system()
+    if success:
+        logger.info("✅ Inicialización exitosa")
+        
+        # Programar actualizaciones automáticas
+        schedule_automatic_updates()
+        
+        return True
+    else:
+        logger.error("❌ Error en inicialización")
+        return False
+
+# ============================================================
+# PUNTO DE ENTRADA PRINCIPAL
+# ============================================================
+
+if __name__ == '__main__':
+    try:
+        # Ejecutar secuencia de inicio
+        startup_success = startup_sequence()
+        
+        if startup_success:
+            logger.info(f"🚀 Iniciando servidor Flask en puerto {PORT}")
+            logger.info("🌐 Dashboard disponible en: http://localhost:10000")
+            logger.info("📡 API disponible en: http://localhost:10000/api/")
+            
+            # Iniciar servidor Flask
+            app.run(
+                host='0.0.0.0',
+                port=PORT,
+                debug=False,  # Desactivar debug en producción
+                threaded=True,
+                use_reloader=False  # Evitar doble inicialización
+            )
+        else:
+            logger.error("❌ No se pudo inicializar el sistema")
+            sys.exit(1)
+            
+    except Exception as e:
+        logger.error(f"❌ Error crítico en punto de entrada: {e}")
+        sys.exit(1)# BETPLAY COLOMBIA - SCRAPER & ANALYZER BACKEND V2.1
 # ===================================================
 # Versión optimizada y corregida para Render
 
@@ -1256,7 +1680,7 @@ def dashboard():
         </html>
         """
         
-            except Exception as e:
+    except Exception as e:
         logger.error(f"Error en dashboard: {e}")
         return f"<h1>Error en Dashboard: {str(e)}</h1>", 500
 
@@ -1293,429 +1717,3 @@ def get_matches():
             'message': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
-
-@app.route('/api/analysis')
-def get_analysis():
-    """Endpoint para análisis estadístico avanzado"""
-    try:
-        matches = CACHE.get('analysis_results', [])
-        
-        if not matches:
-            return jsonify({
-                'status': 'warning', 
-                'message': 'No hay datos disponibles para análisis',
-                'timestamp': datetime.now().isoformat()
-            })
-        
-        # Extraer análisis
-        analyses = [m.get('analysis', {}) for m in matches if 'analysis' in m]
-        
-        if not analyses:
-            return jsonify({
-                'status': 'warning',
-                'message': 'No hay análisis disponibles',
-                'timestamp': datetime.now().isoformat()
-            })
-        
-        # Estadísticas generales
-        confidences = [a.get('confidence', 0) for a in analyses]
-        expected_values = [a.get('expected_value', 0) for a in analyses]
-        recommendations = [a.get('recommendation', '') for a in analyses]
-        
-        # Calcular métricas
-        avg_confidence = sum(confidences) / len(confidences) if confidences else 0
-        high_confidence = len([c for c in confidences if c >= 75])
-        medium_confidence = len([c for c in confidences if 60 <= c < 75])
-        low_confidence = len([c for c in confidences if c < 60])
-        
-        positive_value = len([ev for ev in expected_values if ev > 0])
-        avg_expected_value = sum([ev for ev in expected_values if ev > 0]) / len([ev for ev in expected_values if ev > 0]) if any(ev > 0 for ev in expected_values) else 0
-        
-        # Distribución de recomendaciones
-        rec_distribution = {
-            'home': recommendations.count('home'),
-            'draw': recommendations.count('draw'),
-            'away': recommendations.count('away')
-        }
-        
-        # Mejores oportunidades
-        valid_matches = [m for m in matches if 'analysis' in m and m['analysis'].get('expected_value', 0) > 0]
-        best_opportunities = sorted(
-            valid_matches,
-            key=lambda x: x['analysis']['confidence'] * (1 + x['analysis']['expected_value']) * 100,
-            reverse=True
-        )[:10]
-        
-        # Análisis por liga
-        league_analysis = {}
-        for match in matches:
-            league = match.get('league', 'Desconocida')
-            if league not in league_analysis:
-                league_analysis[league] = {
-                    'matches': 0,
-                    'avg_confidence': 0,
-                    'total_confidence': 0
-                }
-            league_analysis[league]['matches'] += 1
-            if 'analysis' in match:
-                league_analysis[league]['total_confidence'] += match['analysis'].get('confidence', 0)
-        
-        for league, data in league_analysis.items():
-            if data['matches'] > 0:
-                data['avg_confidence'] = round(data['total_confidence'] / data['matches'], 1)
-            del data['total_confidence']  # Limpiar dato temporal
-        
-        response = {
-            'status': 'success',
-            'timestamp': datetime.now().isoformat(),
-            'summary': {
-                'total_matches': len(matches),
-                'analyzed_matches': len(analyses),
-                'average_confidence': round(avg_confidence, 1),
-                'confidence_distribution': {
-                    'high': high_confidence,
-                    'medium': medium_confidence,
-                    'low': low_confidence
-                },
-                'positive_expected_value': positive_value,
-                'average_expected_value': round(avg_expected_value, 3),
-                'recommendation_distribution': rec_distribution,
-                'last_update': CACHE.get('last_update').isoformat() if CACHE.get('last_update') else None
-            },
-            'best_opportunities': [
-                {
-                    'match': f"{m['home_team']} vs {m['away_team']}",
-                    'league': m.get('league', ''),
-                    'confidence': m['analysis']['confidence'],
-                    'expected_value': m['analysis']['expected_value'],
-                    'recommendation': m['analysis']['recommendation'],
-                    'risk_level': m['analysis'].get('risk_level', 'MEDIO'),
-                    'win_probability': m['analysis'].get('win_probability', 0)
-                } for m in best_opportunities
-            ],
-            'league_analysis': league_analysis,
-            'system_info': {
-                'sklearn_available': SKLEARN_AVAILABLE,
-                'analysis_type': 'ML' if SKLEARN_AVAILABLE else 'Statistical'
-            }
-        }
-        
-        return jsonify(response)
-        
-    except Exception as e:
-        logger.error(f"Error en /api/analysis: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-@app.route('/api/recommendations')
-def get_recommendations():
-    """Endpoint para mejores recomendaciones de apuesta"""
-    try:
-        matches = CACHE.get('analysis_results', [])
-        valid_matches = [m for m in matches if 'analysis' in m]
-        
-        if not valid_matches:
-            return jsonify({
-                'status': 'warning',
-                'message': 'No hay recomendaciones disponibles',
-                'timestamp': datetime.now().isoformat()
-            })
-        
-        # Filtrar mejores apuestas (criterios estrictos)
-        premium_bets = []
-        good_bets = []
-        moderate_bets = []
-        
-        for match in valid_matches:
-            analysis = match['analysis']
-            confidence = analysis.get('confidence', 0)
-            expected_value = analysis.get('expected_value', 0)
-            risk_level = analysis.get('risk_level', 'ALTO')
-            
-            bet_data = {
-                'match': f"{match['home_team']} vs {match['away_team']}",
-                'league': match.get('league', ''),
-                'date': match.get('date', ''),
-                'time': match.get('time', ''),
-                'recommendation': f"Apostar por {analysis['recommendation']}",
-                'confidence': confidence,
-                'expected_value': expected_value,
-                'win_probability': analysis.get('win_probability', 0),
-                'reasons': analysis.get('reasons', []),
-                'risk_level': risk_level,
-                'analysis_type': analysis.get('analysis_type', 'Statistical'),
-                'score': confidence * (1 + expected_value) * 100  # Score combinado
-            }
-            
-            # Categorizar apuestas
-            if confidence >= 80 and expected_value > 0.08 and risk_level in ['BAJO', 'MEDIO-BAJO']:
-                premium_bets.append(bet_data)
-            elif confidence >= 70 and expected_value > 0.05:
-                good_bets.append(bet_data)
-            elif confidence >= 60 and expected_value > 0.02:
-                moderate_bets.append(bet_data)
-        
-        # Ordenar por score
-        premium_bets.sort(key=lambda x: x['score'], reverse=True)
-        good_bets.sort(key=lambda x: x['score'], reverse=True)
-        moderate_bets.sort(key=lambda x: x['score'], reverse=True)
-        
-        # Limitar resultados
-        premium_bets = premium_bets[:5]
-        good_bets = good_bets[:8]
-        moderate_bets = moderate_bets[:10]
-        
-        # Todas las recomendaciones ordenadas por score
-        all_recommendations = premium_bets + good_bets + moderate_bets
-        all_recommendations.sort(key=lambda x: x['score'], reverse=True)
-        
-        response = {
-            'status': 'success',
-            'timestamp': datetime.now().isoformat(),
-            'summary': {
-                'total_matches_analyzed': len(valid_matches),
-                'premium_opportunities': len(premium_bets),
-                'good_opportunities': len(good_bets),
-                'moderate_opportunities': len(moderate_bets),
-                'recommendation_criteria': {
-                    'premium': 'Confianza ≥80%, Valor esperado >8%, Riesgo bajo',
-                    'good': 'Confianza ≥70%, Valor esperado >5%',
-                    'moderate': 'Confianza ≥60%, Valor esperado >2%'
-                }
-            },
-            'recommendations': {
-                'premium': premium_bets,
-                'good': good_bets,
-                'moderate': moderate_bets,
-                'all': all_recommendations[:15]  # Top 15 general
-            }
-        }
-        
-        return jsonify(response)
-        
-    except Exception as e:
-        logger.error(f"Error en /api/recommendations: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-@app.route('/api/update', methods=['POST'])
-def force_update():
-    """Endpoint para forzar actualización manual"""
-    try:
-        # Verificar si el sistema está inicializado
-        if not CACHE.get('initialization_complete'):
-            return jsonify({
-                'status': 'error',
-                'message': 'Sistema no inicializado completamente',
-                'timestamp': datetime.now().isoformat()
-            }), 503
-        
-        logger.info("🔄 Actualización manual solicitada")
-        start_time = time.time()
-        
-        # Realizar actualización
-        success = update_betting_data()
-        duration = time.time() - start_time
-        
-        if success:
-            matches_analyzed = len(CACHE.get('analysis_results', []))
-            matches_scraped = len(CACHE.get('scraped_data', []))
-            
-            return jsonify({
-                'status': 'success',
-                'message': f'Actualización completada en {duration:.2f} segundos',
-                'data': {
-                    'matches_scraped': matches_scraped,
-                    'matches_analyzed': matches_analyzed,
-                    'success_rate': f"{(matches_analyzed/matches_scraped*100):.1f}%" if matches_scraped > 0 else "0%",
-                    'error_count': CACHE.get('error_count', 0)
-                },
-                'timestamp': datetime.now().isoformat(),
-                'next_auto_update': (datetime.now() + timedelta(seconds=CACHE['update_frequency'])).isoformat()
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': 'Error durante la actualización',
-                'duration': f"{duration:.2f} segundos",
-                'timestamp': datetime.now().isoformat()
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"Error en actualización manual: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': f'Error inesperado: {str(e)}',
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-@app.route('/health')
-def health_check():
-    """Endpoint de health check detallado"""
-    try:
-        current_time = datetime.now()
-        
-        # Información del sistema
-        system_info = {
-            'status': 'healthy' if CACHE.get('initialization_complete') else 'initializing',
-            'timestamp': current_time.isoformat(),
-            'uptime_seconds': int((current_time - CACHE['system_start_time']).total_seconds()),
-            'python_version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            'port': PORT
-        }
-        
-        # Estado de componentes
-        components = {
-            'scraper': 'ok' if scraper else 'not_initialized',
-            'analyzer': 'ok' if analyzer else 'not_initialized',
-            'sklearn': 'available' if SKLEARN_AVAILABLE else 'not_available',
-            'cache': 'ok',
-            'api': 'ok'
-        }
-        
-        # Métricas de datos
-        data_metrics = {
-            'scraped_matches': len(CACHE.get('scraped_data', [])),
-            'analyzed_matches': len(CACHE.get('analysis_results', [])),
-            'last_update': CACHE.get('last_update').isoformat() if CACHE.get('last_update') else None,
-            'error_count': CACHE.get('error_count', 0),
-            'needs_update': should_update_data()
-        }
-        
-        # Calcular tiempo desde última actualización
-        if CACHE.get('last_update'):
-            time_since_update = current_time - CACHE['last_update']
-            data_metrics['hours_since_update'] = round(time_since_update.total_seconds() / 3600, 2)
-        else:
-            data_metrics['hours_since_update'] = None
-        
-        # Estado general
-        overall_status = 'healthy'
-        if not CACHE.get('initialization_complete'):
-            overall_status = 'initializing'
-        elif CACHE.get('error_count', 0) > 5:
-            overall_status = 'degraded'
-        elif not CACHE.get('analysis_results'):
-            overall_status = 'warning'
-        
-        response = {
-            'status': overall_status,
-            'system': system_info,
-            'components': components,
-            'data': data_metrics
-        }
-        
-        # Código de estado HTTP basado en el estado general
-        status_code = 200
-        if overall_status == 'initializing':
-            status_code = 503
-        
-        return jsonify(response), status_code
-        
-    except Exception as e:
-        logger.error(f"Error en health check: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-# ============================================================
-# SCHEDULER Y TAREAS AUTOMÁTICAS
-# ============================================================
-
-def schedule_automatic_updates():
-    """Configura actualizaciones automáticas"""
-    schedule.every(3).hours.do(update_betting_data)
-    logger.info("📅 Actualizaciones automáticas programadas cada 3 horas")
-    
-    def run_scheduler():
-        while True:
-            schedule.run_pending()
-            time.sleep(60)  # Verificar cada minuto
-    
-    # Ejecutar scheduler en hilo separado
-    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
-    scheduler_thread.start()
-    logger.info("✅ Scheduler iniciado en hilo separado")
-
-# ============================================================
-# MANEJO DE ERRORES
-# ============================================================
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({
-        'status': 'error',
-        'message': 'Endpoint no encontrado',
-        'timestamp': datetime.now().isoformat()
-    }), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    logger.error(f"Error interno del servidor: {error}")
-    return jsonify({
-        'status': 'error',
-        'message': 'Error interno del servidor',
-        'timestamp': datetime.now().isoformat()
-    }), 500
-
-# ============================================================
-# INICIALIZACIÓN Y PUNTO DE ENTRADA
-# ============================================================
-
-def startup_sequence():
-    """Secuencia de inicio del sistema"""
-    logger.info("🌟 Iniciando BetPlay Colombia - Sistema de Análisis IA")
-    logger.info(f"🐍 Python {sys.version}")
-    logger.info(f"🔢 Puerto: {PORT}")
-    logger.info(f"🧠 Sklearn disponible: {SKLEARN_AVAILABLE}")
-    
-    # Inicializar sistema
-    success = initialize_system()
-    if success:
-        logger.info("✅ Inicialización exitosa")
-        
-        # Programar actualizaciones automáticas
-        schedule_automatic_updates()
-        
-        return True
-    else:
-        logger.error("❌ Error en inicialización")
-        return False
-
-# ============================================================
-# PUNTO DE ENTRADA PRINCIPAL
-# ============================================================
-
-if __name__ == '__main__':
-    try:
-        # Ejecutar secuencia de inicio
-        startup_success = startup_sequence()
-        
-        if startup_success:
-            logger.info(f"🚀 Iniciando servidor Flask en puerto {PORT}")
-            logger.info("🌐 Dashboard disponible en: http://localhost:10000")
-            logger.info("📡 API disponible en: http://localhost:10000/api/")
-            
-            # Iniciar servidor Flask
-            app.run(
-                host='0.0.0.0',
-                port=PORT,
-                debug=False,  # Desactivar debug en producción
-                threaded=True,
-                use_reloader=False  # Evitar doble inicialización
-            )
-        else:
-            logger.error("❌ No se pudo inicializar el sistema")
-            sys.exit(1)
-            
-    except Exception as e:
-        logger.error(f"❌ Error crítico en punto de entrada: {e}")
-        sys.exit(1)
