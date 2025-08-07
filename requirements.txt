@@ -19,3 +19,6 @@ numpy>=1.26.0,<3.0.0
 # UTILITIES
 schedule==1.2.2
 python-dateutil==2.9.0
+
+# SERVIDOR WSGI PARA RENDER
+gunicorn==22.0.0
