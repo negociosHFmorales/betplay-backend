@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 BetPlay Analyzer - Sistema IA</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            padding: 30px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            background: #2d3561;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .status-item {
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+            margin: 5px;
+        }
+        
+        .status-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00ff88;
+            display: block;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            color: #0a0e27;
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        .filters {
+            background: #2d3561;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        select {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            background: #1a1f3a;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .matches-grid {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        }
+        
+        .match-card {
+            background: linear-gradient(135deg, #2d3561 0%, #3b4371 100%);
+            border-radius: 15px;
+            padding: 25px;
+            border-left: 5px solid #00ff88;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .match-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.2);
+        }
+        
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .sport-badge {
+            background: #ff6b35;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .confidence {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .teams {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .team-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .vs {
+            color: #ff6b35;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .recommendation {
+            background: rgba(0, 255, 136, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border: 1px solid #00ff88;
+        }
+        
+        .rec-title {
+            font-weight: bold;
+            color: #00ff88;
+            margin-bottom: 8px;
+        }
+        
+        .odds-display {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 8px;
+        }
+        
+        .odd-item {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .odd-label {
+            font-size: 12px;
+            color: #ccc;
+        }
+        
+        .odd-value {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .reasons {
+            margin-top: 15px;
+        }
+        
+        .reason-item {
+            background: rgba(255, 107, 53, 0.1);
+            padding: 5px 10px;
+            margin: 5px 0;
+            border-radius: 15px;
+            font-size: 13px;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2rem;
+            color: #00ff88;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 30px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            border-radius: 10px;
+            color: #ef4444;
+        }
+        
+        .high-confidence { border-left-color: #00ff88; }
+        .medium-confidence { border-left-color: #f59e0b; }
+        .low-confidence { border-left-color: #6b7280; }
+        
+        @media (max-width: 768px) {
+            .header h1 { font-size: 2rem; }
+            .status-bar { flex-direction: column; }
+            .controls { justify-content: center; }
+            .filters { flex-direction: column; }
+            .matches-grid { grid-template-columns: 1fr; }
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #00ff88;
+            color: #0a0e27;
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-weight: bold;
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎯 BetPlay Analyzer</h1>
+            <p>Sistema Inteligente de Análisis de Apuestas Deportivas</p>
+            <p>⚡ Actualización automática cada 3 horas | 🧠 Análisis con Inteligencia Artificial</p>
+        </div>
+
+        <!-- Barra de Estado -->
+        <div class="status-bar" id="statusBar">
+            <div class="status-item">
+                <span class="status-value" id="totalMatches">-</span>
+                <div>Partidos Analizados</div>
+            </div>
+            <div class="status-item">
+                <span class="status-value" id="highConfidence">-</span>
+                <div>Alta Confianza</div>
+            </div>
+            <div class="status-item">
+                <span class="status-value" id="valueBets">-</span>
+                <div>Oportunidades</div>
+            </div>
+            <div class="status-item">
+                <span class="status-value" id="avgConfidence">-</span>
+                <div>Confianza Promedio</div>
+            </div>
+            <div class="status-item">
+                <span class="status-value" id="lastUpdate">-</span>
+                <div>Última Actualización</div>
+            </div>
+        </div>
+
+        <!-- Controles -->
+        <div class="controls">
+            <button class="btn btn-primary" onclick="updateData()">🔄 Actualizar Datos</button>
+            <button class="btn btn-secondary" onclick="showRecommendations()">⭐ Mejores Oportunidades</button>
+            <button class="btn btn-warning" onclick="showStats()">📊 Estadísticas</button>
+        </div>
+
+        <!-- Filtros -->
+        <div class="filters">
+            <label>🏆 Deporte:</label>
+            <select id="sportFilter" onchange="applyFilters()">
+                <option value="all">Todos los Deportes</option>
+                <option value="soccer">⚽ Fútbol</option>
+                <option value="basketball">🏀 Baloncesto</option>
+                <option value="tennis">🎾 Tenis</option>
+            </select>
+
+            <label>📈 Confianza Mínima:</label>
+            <select id="confidenceFilter" onchange="applyFilters()">
+                <option value="0">Todas las Confianzas</option>
+                <option value="60">60% o más</option>
+                <option value="70">70% o más</option>
+                <option value="80">80% o más</option>
+            </select>
+
+            <label>💎 Mostrar Solo:</label>
+            <select id="valueFilter" onchange="applyFilters()">
+                <option value="all">Todos los Partidos</option>
+                <option value="high_value">Alta Oportunidad</option>
+                <option value="recommendations">Solo Recomendaciones</option>
+            </select>
+        </div>
+
+        <!-- Contenido Principal -->
+        <div id="mainContent">
+            <div class="loading">
+                🔄 Cargando datos del sistema BetPlay Analyzer...
+            </div>
+        </div>
+    </div>
+
+    <!-- Notificación -->
+    <div class="notification" id="notification"></div>
+
+    <script>
+        // CONFIGURACIÓN PRINCIPAL
+        const CONFIG = {
+            enableRealAPI: false, // Cambiar a true cuando tengas el backend desplegado
+            apiEndpoint: 'https://tu-app-en-render.onrender.com', // Cambiar por tu URL de Render
+            updateInterval: 30000, // 30 segundos
+            mockDataEnabled: true
+        };
+
+        // DATOS GLOBALES
+        let allMatches = [];
+        let filteredMatches = [];
+        let currentStats = {};
+
+        // DATOS SIMULADOS PARA DEMOSTRACIÓN
+        const MOCK_DATA = {
+            matches: [
+                {
+                    id: 'mock_1',
+                    sport: 'soccer',
+                    league: 'Liga BetPlay',
+                    home_team: 'Millonarios',
+                    away_team: 'Nacional',
+                    date: '2024-08-07',
+                    time: '20:00',
+                    odds: { home: 2.10, draw: 3.20, away: 2.80 },
+                    analysis: {
+                        confidence: 85,
+                        recommendation: 'home',
+                        expected_value: 0.15,
+                        win_probability: 58,
+                        reasons: ['Ventaja de local fuerte', 'Mejor forma reciente', 'Historial favorable H2H']
+                    }
+                },
+                {
+                    id: 'mock_2',
+                    sport: 'soccer',
+                    league: 'Premier League',
+                    home_team: 'Manchester City',
+                    away_team: 'Arsenal',
+                    date: '2024-08-07',
+                    time: '16:30',
+                    odds: { home: 1.75, draw: 3.80, away: 4.20 },
+                    analysis: {
+                        confidence: 78,
+                        recommendation: 'home',
+                        expected_value: 0.12,
+                        win_probability: 62,
+                        reasons: ['Superioridad ofensiva clara', 'Arsenal sin jugadores clave', 'Etihad Stadium factor']
+                    }
+                },
+                {
+                    id: 'mock_3',
+                    sport: 'basketball',
+                    league: 'NBA',
+                    home_team: 'Lakers',
+                    away_team: 'Warriors',
+                    date: '2024-08-07',
+                    time: '22:00',
+                    odds: { home: 2.05, away: 1.75 },
+                    analysis: {
+                        confidence: 72,
+                        recommendation: 'away',
+                        expected_value: 0.08,
+                        win_probability: 55,
+                        reasons: ['Warriors mejor ofensiva', 'Curry en gran forma', 'Lakers lesionados']
+                    }
+                },
+                {
+                    id: 'mock_4',
+                    sport: 'tennis',
+                    league: 'ATP Masters',
+                    home_team: 'Novak Djokovic',
+                    away_team: 'Carlos Alcaraz',
+                    date: '2024-08-07',
+                    time: '14:00',
+                    odds: { home: 2.30, away: 1.60 },
+                    analysis: {
+                        confidence: 68,
+                        recommendation: 'away',
+                        expected_value: 0.06,
+                        win_probability: 52,
+                        reasons: ['Alcaraz en mejor momento', 'Superficie favorable', 'Joven vs veterano']
+                    }
+                }
+            ]
+        };
+
+        // FUNCIONES PRINCIPALES
+        async function fetchData(endpoint = '/api/analysis') {
+            try {
+                if (!CONFIG.enableRealAPI || CONFIG.mockDataEnabled) {
+                    // Simular delay de red
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    return simulateMockResponse();
+                }
+
+                const response = await fetch(CONFIG.apiEndpoint + endpoint);
+                if (!response.ok) throw new Error(`Error: ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                showNotification('Error conectando con la API. Usando datos de demostración.', 'warning');
+                return simulateMockResponse();
+            }
+        }
+
+        function simulateMockResponse() {
+            const matches = MOCK_DATA.matches;
+            const highConfidence = matches.filter(m => m.analysis.confidence >= 75).length;
+            const valueBets = matches.filter(m => m.analysis.expected_value > 0.1).length;
+            const avgConfidence = matches.reduce((sum, m) => sum + m.analysis.confidence, 0) / matches.length;
+
+            return {
+                status: 'success',
+                summary: {
+                    total_matches: matches.length,
+                    high_confidence_matches: highConfidence,
+                    value_bets_found: valueBets,
+                    average_confidence: avgConfidence,
+                    last_update: new Date().toISOString()
+                },
+                best_opportunities: matches.slice(0, 2),
+                matches: matches
+            };
+        }
+
+        function updateStatusBar(data) {
+            if (!data.summary) return;
+
+            const s = data.summary;
+            document.getElementById('totalMatches').textContent = s.total_matches || 0;
+            document.getElementById('highConfidence').textContent = s.high_confidence_matches || 0;
+            document.getElementById('valueBets').textContent = s.value_bets_found || 0;
+            document.getElementById('avgConfidence').textContent = s.average_confidence ? s.average_confidence.toFixed(1) + '%' : '-';
+            
+            const lastUpdate = s.last_update ? new Date(s.last_update).toLocaleTimeString('es-CO') : 'Nunca';
+            document.getElementById('lastUpdate').textContent = lastUpdate;
+        }
+
+        function renderMatches(matches) {
+            const container = document.getElementById('mainContent');
+            
+            if (!matches || matches.length === 0) {
+                container.innerHTML = `
+                    <div class="error">
+                        <h3>😔 No hay partidos disponibles</h3>
+                        <p>Intenta actualizar los datos o ajustar los filtros</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const matchesHTML = matches.map(match => createMatchCard(match)).join('');
+            container.innerHTML = `<div class="matches-grid">${matchesHTML}</div>`;
+        }
+
+        function createMatchCard(match) {
+            const sport = match.sport;
+            const analysis = match.analysis;
+            const odds = match.odds;
+            
+            // Determinar clase de confianza
+            let confidenceClass = 'low-confidence';
+            if (analysis.confidence >= 80) confidenceClass = 'high-confidence';
+            else if (analysis.confidence >= 65) confidenceClass = 'medium-confidence';
+
+            // Emoji por deporte
+            const sportEmojis = { 'soccer': '⚽', 'basketball': '🏀', 'tennis': '🎾' };
+            const sportEmoji = sportEmojis[sport] || '🏆';
+
+            // Formatear odds
+            let oddsHTML = '';
+            if (sport === 'soccer' && odds.draw) {
+                oddsHTML = `
+                    <div class="odds-display">
+                        <div class="odd-item">
+                            <div class="odd-label">Local</div>
+                            <div class="odd-value">${odds.home || '-'}</div>
+                        </div>
+                        <div class="odd-item">
+                            <div class="odd-label">Empate</div>
+                            <div class="odd-value">${odds.draw || '-'}</div>
+                        </div>
+                        <div class="odd-item">
+                            <div class="odd-label">Visitante</div>
+                            <div class="odd-value">${odds.away || '-'}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                oddsHTML = `
+                    <div class="odds-display">
+                        <div class="odd-item">
+                            <div class="odd-label">${match.home_team}</div>
+                            <div class="odd-value">${odds.home || '-'}</div>
+                        </div>
+                        <div class="odd-item">
+                            <div class="odd-label">${match.away_team}</div>
+                            <div class="odd-value">${odds.away || '-'}</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Formatear recomendación
+            const recText = analysis.recommendation === 'home' ? match.home_team : 
+                           analysis.recommendation === 'away' ? match.away_team : 'Empate';
+
+            const reasonsHTML = analysis.reasons.map(reason => 
+                `<span class="reason-item">${reason}</span>`
+            ).join('');
+
+            return `
+                <div class="match-card ${confidenceClass}">
+                    <div class="match-header">
+                        <span class="sport-badge">${sportEmoji} ${match.league}</span>
+                        <span class="confidence">${analysis.confidence}%</span>
+                    </div>
+                    
+                    <div class="teams">
+                        <div class="team-name">${match.home_team}</div>
+                        <div class="vs">VS</div>
+                        <div class="team-name">${match.away_team}</div>
+                        <div style="margin-top: 10px; color: #ccc; font-size: 14px;">
+                            📅 ${match.date} | ⏰ ${match.time}
+                        </div>
+                    </div>
+
+                    ${oddsHTML}
+
+                    <div class="recommendation">
+                        <div class="rec-title">🎯 Recomendación IA</div>
+                        <div><strong>Apostar a:</strong> ${recText}</div>
+                        <div><strong>Probabilidad:</strong> ${analysis.win_probability}%</div>
+                        <div><strong>Valor Esperado:</strong> +${(analysis.expected_value * 100).toFixed(1)}%</div>
+                    </div>
+
+                    <div class="reasons">
+                        <div style="margin-bottom: 8px; font-weight: bold; color: #ff6b35;">💡 Razones del Análisis:</div>
+                        ${reasonsHTML}
+                    </div>
+                </div>
+            `;
+        }
+
+        function applyFilters() {
+            const sportFilter = document.getElementById('sportFilter').value;
+            const confidenceFilter = parseInt(document.getElementById('confidenceFilter').value);
+            const valueFilter = document.getElementById('valueFilter').value;
+
+            filteredMatches = allMatches.filter(match => {
+                // Filtro por deporte
+                if (sportFilter !== 'all' && match.sport !== sportFilter) return false;
+                
+                // Filtro por confianza
+                if (confidenceFilter > 0 && match.analysis.confidence < confidenceFilter) return false;
+                
+                // Filtro por valor
+                if (valueFilter === 'high_value' && match.analysis.expected_value < 0.1) return false;
+                if (valueFilter === 'recommendations' && match.analysis.confidence < 70) return false;
+                
+                return true;
+            });
+
+            renderMatches(filteredMatches);
+            showNotification(`Filtros aplicados: ${filteredMatches.length} partidos mostrados`, 'success');
+        }
+
+        async function updateData() {
+            document.getElementById('mainContent').innerHTML = '<div class="loading">🔄 Actualizando datos...</div>';
+            
+            try {
+                const data = await fetchData('/api/analysis');
+                
+                if (data.status === 'success') {
+                    allMatches = data.matches || data.best_opportunities || [];
+                    currentStats = data;
+                    
+                    updateStatusBar(data);
+                    applyFilters(); // Aplicar filtros actuales
+                    
+                    showNotification('¡Datos actualizados exitosamente!', 'success');
+                } else {
+                    throw new Error('Error en la respuesta de la API');
+                }
+            } catch (error) {
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error al cargar datos</h3>
+                        <p>${error.message}</p>
+                        <button class="btn btn-primary" onclick="updateData()">🔄 Reintentar</button>
+                    </div>
+                `;
+            }
+        }
+
+        async function showRecommendations() {
+            try {
+                const data = await fetchData('/api/recommendations');
+                
+                if (data.status === 'success' && data.recommendations) {
+                    const topRecommendations = data.recommendations.slice(0, 3);
+                    
+                    const recHTML = topRecommendations.map(rec => `
+                        <div class="match-card high-confidence">
+                            <div class="match-header">
+                                <span class="sport-badge">⭐ ${rec.priority} PRIORITY</span>
+                                <span class="confidence">${rec.recommendation.confidence}%</span>
+                            </div>
+                            <div class="teams">
+                                <div class="team-name" style="font-size: 1.1rem;">${rec.match}</div>
+                                <div style="color: #ff6b35; margin: 10px 0;">${rec.league}</div>
+                            </div>
+                            <div class="recommendation">
+                                <div class="rec-title">🎯 Recomendación Prioritaria</div>
+                                <div><strong>Apostar a:</strong> ${rec.recommendation.bet_on}</div>
+                                <div><strong>Cuota:</strong> ${rec.recommendation.odds}</div>
+                                <div><strong>Probabilidad:</strong> ${rec.recommendation.win_probability}%</div>
+                                <div><strong>Valor Esperado:</strong> +${rec.recommendation.expected_value}%</div>
+                                <div><strong>Stake Sugerido:</strong> ${rec.suggested_stake}</div>
+                            </div>
+                            <div class="reasons">
+                                ${rec.reasons.map(r => `<span class="reason-item">${r}</span>`).join('')}
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    document.getElementById('mainContent').innerHTML = `
+                        <div style="text-align: center; margin-bottom: 30px;">
+                            <h2 style="color: #00ff88;">⭐ MEJORES OPORTUNIDADES IA</h2>
+                            <p>Las apuestas con mayor confianza y valor esperado</p>
+                            <button class="btn btn-secondary" onclick="updateData()" style="margin-top: 15px;">← Volver a todos los partidos</button>
+                        </div>
+                        <div class="matches-grid">${recHTML}</div>
+                    `;
+                    
+                    showNotification('Mostrando las mejores oportunidades detectadas por la IA', 'success');
+                } else {
+                    throw new Error('No se encontraron recomendaciones');
+                }
+            } catch (error) {
+                showNotification('Error cargando recomendaciones: ' + error.message, 'error');
+            }
+        }
+
+        async function showStats() {
+            try {
+                const data = await fetchData('/api/stats');
+                
+                if (data.status === 'success') {
+                    const stats = data.analysis_stats || {};
+                    const sportsBreakdown = stats.sports_breakdown || {};
+                    
+                    let sportsHTML = '';
+                    for (const [sport, sportStats] of Object.entries(sportsBreakdown)) {
+                        const sportEmojis = { 'soccer': '⚽', 'basketball': '🏀', 'tennis': '🎾' };
+                        const emoji = sportEmojis[sport] || '🏆';
+                        
+                        sportsHTML += `
+                            <div class="match-card">
+                                <h3>${emoji} ${sport.toUpperCase()}</h3>
+                                <div style="display: flex; justify-content: space-between; margin: 15px 0;">
+                                    <div class="status-item">
+                                        <span class="status-value">${sportStats.total || 0}</span>
+                                        <div>Total Partidos</div>
+                                    </div>
+                                    <div class="status-item">
+                                        <span class="status-value">${sportStats.high_conf || 0}</span>
+                                        <div>Alta Confianza</div>
+                                    </div>
+                                    <div class="status-item">
+                                        <span class="status-value">${sportStats.avg_conf || 0}%</span>
+                                        <div>Confianza Promedio</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    document.getElementById('mainContent').innerHTML = `
+                        <div style="text-align: center; margin-bottom: 30px;">
+                            <h2 style="color: #00ff88;">📊 ESTADÍSTICAS DEL SISTEMA</h2>
+                            <p>Análisis detallado del rendimiento de la IA</p>
+                            <button class="btn btn-secondary" onclick="updateData()" style="margin-top: 15px;">← Volver a partidos</button>
+                        </div>
+                        
+                        <div class="match-card high-confidence">
+                            <h3>🎯 Resumen General</h3>
+                            <div class="status-bar">
+                                <div class="status-item">
+                                    <span class="status-value">${stats.total_matches || 0}</span>
+                                    <div>Partidos Totales</div>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-value">${stats.high_confidence_matches || 0}</span>
+                                    <div>Alta Confianza (75%+)</div>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-value">${stats.value_bets_found || 0}</span>
+                                    <div>Oportunidades de Valor</div>
+                                </div>
+                                <div class="status-item">
+                                    <span class="status-value">${stats.average
