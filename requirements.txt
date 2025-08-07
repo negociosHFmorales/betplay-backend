@@ -1,26 +1,21 @@
-
-# BETPLAY BACKEND - Requirements optimizados para Render
-# Versiones compatibles con Python 3.13 y Render
+# BETPLAY BACKEND - SOLUCIÓN PARA PYTHON 3.13
+# ====================================================
+# Versiones COMPATIBLES con Python 3.13
 
 Flask==3.0.3
 Flask-CORS==4.0.1
 requests==2.31.0
 beautifulsoup4==4.12.2
 
-# Pandas con versión más compatible
-pandas==2.1.4
+# PANDAS COMPATIBLE CON PYTHON 3.13
+pandas==2.2.3
 
-# Scikit-learn con versiones más estables
-# Removemos scikit-learn temporalmente para evitar conflictos
-# scikit-learn==1.4.2
+# NUMPY COMPATIBLE 
+numpy>=1.26.0,<3.0.0
 
-# Dependencias adicionales que pueden ser útiles
-numpy>=1.24.0,<2.0.0
-scipy>=1.10.0
-lxml>=4.9.0
+# ANÁLISIS ESTADÍSTICO (OPCIONAL - FUNCIONA SIN ESTO)
+# scikit-learn>=1.4.0  # Desactivado temporalmente
 
-# Para el scheduler
-schedule==1.2.0
-
-# Para análisis estadístico (alternativa a sklearn)
-statsmodels>=0.14.0
+# UTILITIES
+schedule==1.2.2
+python-dateutil==2.9.0
