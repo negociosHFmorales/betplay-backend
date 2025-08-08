@@ -1,3 +1,5 @@
+# RUTAS FLASK - DASHBOARD Y API ROUTES
+
 @app.route('/')
 def dashboard():
     """
@@ -124,7 +126,7 @@ def dashboard():
             .recommendation-text {{ font-size: 1.1em; color: #00ff88; margin: 8px 0; font-weight: bold; }}
             .details {{ font-size: 0.9em; opacity: 0.8; margin-top: 10px; line-height: 1.4; }}
             
-            .risk-low {{ border-left-color: #00ff88; }}
+            .risk-bajo {{ border-left-color: #00ff88; }}
             .risk-medio {{ border-left-color: #ffa726; }}
             .risk-alto {{ border-left-color: #ff5252; }}
             
@@ -525,6 +527,15 @@ def server_error(error):
         'contacto': 'Revise los logs para más información'
     }), 500
 
+
+# =====================================
+# PUNTO DE ENTRADA DE LA APLICACIÓN
+# =====================================
+
+# Generar el primer reporte al iniciar la aplicación
+logger.info("🚀 Generando primer reporte al iniciar el sistema...")
+actualizar_analisis()
+
 # Punto de entrada principal de la aplicación
 if __name__ == '__main__':
     logger.info("🚀 Iniciando Asistente de Análisis Deportivo Profesional v3.0")
@@ -567,6 +578,12 @@ warnings.filterwarnings('ignore')
 # Configurar logging para monitorear el funcionamiento del sistema
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# =====================================
+# INICIALIZAR FLASK PRIMERO
+# =====================================
+app = Flask(__name__)
+CORS(app)
 
 @dataclass
 class Partido:
@@ -1135,7 +1152,6 @@ class AnalizadorDeportivoProfesional:
         else:
             rendimiento_casa = 50.0
             
-        # AQUÍ ESTABA EL PROBLEMA ORIGINAL - Esta sección estaba cortada
         if stats['visitante']['partidos_visita'] > 0:
             rendimiento_visita = (stats['visitante']['victorias_visita'] / stats['visitante']['partidos_visita']) * 100
             ataque_visitante = stats['visitante']['goles_favor_visita'] / stats['visitante']['partidos_visita']
@@ -1466,12 +1482,8 @@ class AnalizadorDeportivoProfesional:
 
 
 # =====================================
-# SISTEMA WEB CON FLASK - VERSIÓN CORREGIDA
+# INSTANCIA GLOBAL Y VARIABLES
 # =====================================
-
-# Inicializar aplicación Flask
-app = Flask(__name__)
-CORS(app)
 
 # Instancia global del analizador deportivo
 analizador = AnalizadorDeportivoProfesional()
@@ -1511,6 +1523,7 @@ def ejecutar_scheduler():
 scheduler_thread = threading.Thread(target=ejecutar_scheduler, daemon=True)
 scheduler_thread.start()
 
-# Generar el primer reporte al iniciar la aplicación
-logger.info("🚀 Generando primer reporte al iniciar el sistema...")
-actualizar_analisis()
+
+# =====================================
+# RUTAS FLASK - DASHBOARD Y API
+# =====================================
