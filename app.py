@@ -1,4 +1,549 @@
-# ASISTENTE DE ANÁLISIS DEPORTIVO PROFESIONAL v3.0 - VERSIÓN CORREGIDA
+@app.route('/')
+def dashboard():
+    """
+    Dashboard principal con interfaz web moderna y responsiva
+    Muestra el estado del sistema y las mejores oportunidades de apuesta
+    """
+    global ultimo_reporte, ultima_actualizacion
+    
+    # Asegurar que hay datos disponibles
+    if not ultimo_reporte:
+        logger.info("⚡ No hay reporte disponible, generando uno nuevo...")
+        actualizar_analisis()
+    
+    # Preparar datos para mostrar en el dashboard
+    ultima_act = ultima_actualizacion.strftime('%H:%M:%S') if ultima_actualizacion else 'N/A'
+    top_recomendaciones = ultimo_reporte.get('top_recomendaciones', [])[:3] if ultimo_reporte else []
+    
+    # Calcular estadísticas para mostrar
+    total_partidos = ultimo_reporte.get('total_partidos', 0) if ultimo_reporte else 0
+    deportes_count = len(ultimo_reporte.get('deportes_analizados', [])) if ultimo_reporte else 0
+    oportunidades = ultimo_reporte.get('mejores_oportunidades', 0) if ultimo_reporte else 0
+    confianza_prom = ultimo_reporte.get('resumen_estadistico', {}).get('confianza_promedio', 0) if ultimo_reporte else 0
+    
+    # Template HTML completo y corregido
+    html_template = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <title>🎯 Asistente Análisis Deportivo Profesional v3.0</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="refresh" content="30">
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            
+            body {{
+                background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+                color: white;
+                font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                line-height: 1.6;
+                min-height: 100vh;
+            }}
+            
+            .container {{ max-width: 1400px; margin: 0 auto; padding: 20px; }}
+            
+            .header {{
+                background: linear-gradient(45deg, #ff6b35, #f7931e);
+                padding: 30px;
+                border-radius: 20px;
+                text-align: center;
+                margin-bottom: 30px;
+                box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
+                animation: headerGlow 3s ease-in-out infinite alternate;
+            }}
+            
+            @keyframes headerGlow {{
+                from {{ box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3); }}
+                to {{ box-shadow: 0 15px 40px rgba(255, 107, 53, 0.6); }}
+            }}
+            
+            .header h1 {{ font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); font-weight: 700; }}
+            .header p {{ font-size: 1.2em; opacity: 0.9; margin: 5px 0; }}
+            
+            .stats-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+                margin: 30px 0;
+            }}
+            
+            .stat-card {{
+                background: linear-gradient(135deg, rgba(22, 33, 62, 0.9), rgba(15, 15, 35, 0.9));
+                padding: 25px;
+                border-radius: 15px;
+                text-align: center;
+                border: 2px solid transparent;
+                transition: all 0.3s ease;
+                position: relative;
+                overflow: hidden;
+            }}
+            
+            .stat-card:hover {{
+                border-color: #00ff88;
+                transform: translateY(-5px);
+                box-shadow: 0 15px 35px rgba(0, 255, 136, 0.2);
+            }}
+            
+            .stat-title {{ font-size: 0.9em; opacity: 0.8; margin-bottom: 10px; }}
+            .stat-value {{ 
+                font-size: 2.5em; 
+                font-weight: bold; 
+                margin: 15px 0; 
+                background: linear-gradient(45deg, #00ff88, #4fc3f7);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }}
+            
+            .recommendations {{
+                background: linear-gradient(135deg, rgba(22, 33, 62, 0.8), rgba(15, 15, 35, 0.8));
+                padding: 30px;
+                border-radius: 20px;
+                margin: 30px 0;
+                border: 1px solid rgba(0, 255, 136, 0.3);
+            }}
+            
+            .recommendations h3 {{ color: #00ff88; margin-bottom: 20px; font-size: 1.5em; text-align: center; }}
+            
+            .recommendation-item {{
+                background: rgba(15, 15, 35, 0.6);
+                padding: 20px;
+                margin: 15px 0;
+                border-radius: 12px;
+                border-left: 4px solid #00ff88;
+                transition: all 0.3s ease;
+            }}
+            
+            .recommendation-item:hover {{
+                background: rgba(15, 15, 35, 0.9);
+                transform: translateX(10px);
+            }}
+            
+            .match-info {{ font-size: 1.2em; font-weight: bold; color: #4fc3f7; margin-bottom: 10px; }}
+            .recommendation-text {{ font-size: 1.1em; color: #00ff88; margin: 8px 0; font-weight: bold; }}
+            .details {{ font-size: 0.9em; opacity: 0.8; margin-top: 10px; line-height: 1.4; }}
+            
+            .risk-low {{ border-left-color: #00ff88; }}
+            .risk-medio {{ border-left-color: #ffa726; }}
+            .risk-alto {{ border-left-color: #ff5252; }}
+            
+            .api-info {{
+                background: rgba(22, 33, 62, 0.6);
+                padding: 25px;
+                border-radius: 15px;
+                margin-top: 30px;
+            }}
+            
+            .api-info h3 {{ color: #4fc3f7; margin-bottom: 15px; }}
+            .api-info p {{ 
+                margin: 8px 0; 
+                font-family: 'Courier New', monospace;
+                background: rgba(0,0,0,0.3);
+                padding: 8px;
+                border-radius: 5px;
+                font-size: 0.9em;
+            }}
+            
+            .loading {{
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                border: 3px solid rgba(255,255,255,.3);
+                border-radius: 50%;
+                border-top-color: #00ff88;
+                animation: spin 1s ease-in-out infinite;
+            }}
+            
+            @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+            
+            .status-online {{ color: #00ff88; }}
+            .footer {{
+                text-align: center;
+                margin-top: 40px;
+                padding: 20px;
+                opacity: 0.7;
+                font-size: 0.9em;
+            }}
+            
+            @media (max-width: 768px) {{
+                .container {{ padding: 10px; }}
+                .header h1 {{ font-size: 2em; }}
+                .header p {{ font-size: 1em; }}
+                .stat-value {{ font-size: 2em; }}
+                .stats-grid {{ grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🎯 Asistente Análisis Deportivo Profesional</h1>
+                <p>Sistema de Inteligencia Artificial para Análisis Predictivo Deportivo v3.0</p>
+                <p>🤖 Powered by Advanced Sports Analytics & Machine Learning</p>
+                <p>⚡ Actualización automática cada 2 horas</p>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-title">Estado del Sistema</div>
+                    <div class="stat-value status-online">OPERATIVO</div>
+                    <div class="loading"></div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-title">Partidos Analizados</div>
+                    <div class="stat-value">{total_partidos}</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-title">Deportes Cubiertos</div>
+                    <div class="stat-value">{deportes_count}</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-title">Oportunidades Detectadas</div>
+                    <div class="stat-value">{oportunidades}</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-title">Última Actualización</div>
+                    <div class="stat-value" style="font-size: 1.8em; color: #4fc3f7;">{ultima_act}</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-title">Confianza Promedio IA</div>
+                    <div class="stat-value">{confianza_prom}%</div>
+                </div>
+            </div>
+    """
+    
+    # Agregar sección de recomendaciones si existen
+    if top_recomendaciones:
+        html_template += """
+            <div class="recommendations">
+                <h3>🚀 TOP RECOMENDACIONES - Mayor Valor Esperado</h3>
+        """
+        
+        for rec in top_recomendaciones:
+            riesgo_class = rec['analisis']['recomendacion']['nivel_riesgo'].lower()
+            valor_esperado_pct = round(rec['analisis']['recomendacion']['valor_esperado'] * 100, 1)
+            
+            html_template += f"""
+                <div class="recommendation-item risk-{riesgo_class}">
+                    <div class="match-info">
+                        🏆 {rec['partido']['enfrentamiento']} - {rec['partido']['liga']}
+                    </div>
+                    
+                    <div class="recommendation-text">
+                        💡 {rec['analisis']['recomendacion']['recomendacion']}
+                    </div>
+                    
+                    <div class="details">
+                        📊 Valor Esperado: +{valor_esperado_pct}%<br>
+                        🎯 Confianza IA: {rec['analisis']['recomendacion']['confianza']}%<br>
+                        ⚠️ Nivel de Riesgo: {rec['analisis']['recomendacion']['nivel_riesgo']}<br>
+                        💰 Odds Recomendada: {rec['analisis']['recomendacion']['odds_recomendada']}<br>
+                        📅 Fecha: {rec['partido']['fecha_hora']}
+                    </div>
+                </div>
+            """
+        
+        html_template += "</div>"
+    
+    # Completar el template HTML
+    html_template += """
+            <div class="api-info">
+                <h3>📡 APIs y Endpoints Disponibles</h3>
+                <p><strong>GET /</strong> - Dashboard principal con interfaz web</p>
+                <p><strong>GET /api/analisis</strong> - Análisis completo en formato JSON</p>
+                <p><strong>GET /api/partidos</strong> - Lista todos los partidos disponibles</p>
+                <p><strong>GET /api/recomendaciones</strong> - Solo las mejores oportunidades</p>
+                <p><strong>GET /api/deporte/{deporte}</strong> - Análisis filtrado por deporte</p>
+                <p><strong>GET /health</strong> - Estado y diagnóstico del sistema</p>
+                <p><strong>POST /api/actualizar</strong> - Forzar actualización manual</p>
+            </div>
+            
+            <div class="footer">
+                <p>🔬 Algoritmos de IA: Análisis de forma, eficiencia ofensiva/defensiva, valor esperado</p>
+                <p>📊 Fuentes: APIs deportivas, estadísticas históricas, análisis de mercado</p>
+                <p>⚡ Sistema optimizado para detección de oportunidades de valor</p>
+                <p>🎯 Desarrollado con Python, Flask, NumPy, Pandas y Machine Learning</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html_template
+
+@app.route('/api/analisis')
+def api_analisis_completo():
+    """
+    API REST: Devuelve el análisis completo en formato JSON
+    Ideal para integración con otras aplicaciones
+    """
+    global ultimo_reporte
+    
+    if not ultimo_reporte:
+        logger.info("⚡ Generando análisis para API...")
+        actualizar_analisis()
+    
+    return jsonify({
+        'status': 'success',
+        'data': ultimo_reporte,
+        'sistema': 'Asistente Análisis Deportivo Profesional v3.0',
+        'endpoints_disponibles': [
+            '/api/analisis', '/api/recomendaciones', '/api/partidos', 
+            '/api/deporte/{deporte}', '/health', '/api/actualizar'
+        ]
+    })
+
+@app.route('/api/recomendaciones')
+def api_recomendaciones():
+    """
+    API REST: Devuelve solo las mejores recomendaciones
+    Formato optimizado para sistemas de alertas
+    """
+    global ultimo_reporte
+    
+    if not ultimo_reporte:
+        return jsonify({
+            'status': 'error', 
+            'message': 'No hay datos disponibles. Intente más tarde.'
+        }), 503
+    
+    top_recs = ultimo_reporte.get('top_recomendaciones', [])
+    
+    # Formatear recomendaciones para fácil consumo
+    recomendaciones_formateadas = []
+    for rec in top_recs:
+        recomendaciones_formateadas.append({
+            'id': rec['partido']['id'],
+            'partido': rec['partido']['enfrentamiento'],
+            'liga': rec['partido']['liga'],
+            'deporte': rec['partido'].get('deporte', 'N/A'),
+            'fecha_hora': rec['partido']['fecha_hora'],
+            'recomendacion': rec['analisis']['recomendacion']['recomendacion'],
+            'probabilidad_estimada': rec['analisis']['recomendacion']['probabilidad_estimada'],
+            'valor_esperado': rec['analisis']['recomendacion']['valor_esperado'],
+            'valor_esperado_porcentaje': round(rec['analisis']['recomendacion']['valor_esperado'] * 100, 1),
+            'confianza_ia': rec['analisis']['recomendacion']['confianza'],
+            'nivel_riesgo': rec['analisis']['recomendacion']['nivel_riesgo'],
+            'odds_recomendada': rec['analisis']['recomendacion']['odds_recomendada'],
+            'justificacion': rec['analisis']['recomendacion'].get('justificacion', ''),
+            'factores_clave': rec['analisis'].get('factores_clave', [])
+        })
+    
+    return jsonify({
+        'status': 'success',
+        'timestamp': datetime.now().isoformat(),
+        'total_recomendaciones': len(recomendaciones_formateadas),
+        'recomendaciones': recomendaciones_formateadas,
+        'criterio_seleccion': 'Valor esperado mínimo: 5%',
+        'algoritmo': 'IA Multi-factor con Machine Learning'
+    })
+
+@app.route('/api/deporte/<deporte>')
+def api_por_deporte(deporte):
+    """
+    API REST: Análisis filtrado por deporte específico
+    Útil para aplicaciones especializadas en un solo deporte
+    """
+    global ultimo_reporte
+    
+    if not ultimo_reporte:
+        return jsonify({
+            'status': 'error', 
+            'message': 'No hay datos disponibles'
+        }), 503
+    
+    # Filtrar análisis por deporte solicitado
+    analisis_completo = ultimo_reporte.get('analisis_detallado', [])
+    analisis_deporte = [
+        a for a in analisis_completo 
+        if a['partido'].get('deporte', '').lower() == deporte.lower()
+    ]
+    
+    if not analisis_deporte:
+        return jsonify({
+            'status': 'error',
+            'message': f'No se encontraron partidos para el deporte: {deporte}',
+            'deportes_disponibles': list(set(
+                a['partido'].get('deporte', 'N/A') 
+                for a in analisis_completo
+            ))
+        }), 404
+    
+    # Calcular estadísticas específicas del deporte
+    valores_esperados = [a['analisis']['recomendacion']['valor_esperado'] for a in analisis_deporte]
+    mejores_del_deporte = [a for a in analisis_deporte if a['analisis']['recomendacion']['valor_esperado'] > 0.05]
+    
+    return jsonify({
+        'status': 'success',
+        'deporte': deporte.title(),
+        'total_partidos': len(analisis_deporte),
+        'oportunidades_valor': len(mejores_del_deporte),
+        'valor_esperado_promedio': round(np.mean(valores_esperados) if valores_esperados else 0, 3),
+        'partidos': analisis_deporte,
+        'mejores_oportunidades': sorted(mejores_del_deporte, 
+                                       key=lambda x: x['analisis']['recomendacion']['valor_esperado'], 
+                                       reverse=True)
+    })
+
+@app.route('/api/partidos')
+def api_partidos():
+    """
+    API REST: Lista completa de todos los partidos analizados
+    Incluye información básica sin análisis detallado
+    """
+    global ultimo_reporte
+    
+    if not ultimo_reporte:
+        return jsonify({
+            'status': 'error', 
+            'message': 'No hay datos disponibles'
+        }), 503
+    
+    # Extraer información básica de partidos
+    partidos_info = []
+    for analisis in ultimo_reporte.get('analisis_detallado', []):
+        partido_info = analisis['partido'].copy()
+        partido_info['tiene_valor'] = analisis['analisis']['recomendacion']['valor_esperado'] > 0.05
+        partido_info['confianza'] = analisis['analisis']['confianza_general']
+        partido_info['nivel_riesgo'] = analisis['analisis']['recomendacion']['nivel_riesgo']
+        partidos_info.append(partido_info)
+    
+    return jsonify({
+        'status': 'success',
+        'timestamp': ultimo_reporte['timestamp'],
+        'total_partidos': ultimo_reporte.get('total_partidos', 0),
+        'deportes_disponibles': ultimo_reporte.get('deportes_analizados', []),
+        'partidos': partidos_info,
+        'resumen': ultimo_reporte.get('resumen_estadistico', {}),
+        'version_sistema': ultimo_reporte.get('version_sistema', '3.0')
+    })
+
+@app.route('/api/actualizar', methods=['POST'])
+def api_actualizar_manual():
+    """
+    API REST: Fuerza una actualización manual del análisis
+    Útil para obtener datos frescos antes del ciclo automático
+    """
+    try:
+        logger.info("🔄 Actualización manual solicitada vía API...")
+        actualizar_analisis()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Análisis actualizado manualmente con éxito',
+            'timestamp': datetime.now().isoformat(),
+            'partidos_analizados': ultimo_reporte.get('total_partidos', 0) if ultimo_reporte else 0,
+            'proxima_actualizacion_automatica': 'En 2 horas'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error en actualización manual: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error durante la actualización: {str(e)}',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/health')
+def health_check():
+    """
+    Endpoint de diagnóstico y estado del sistema
+    Útil para monitoreo y debugging
+    """
+    global ultimo_reporte, ultima_actualizacion
+    
+    # Verificar estado de componentes
+    estado_componentes = {
+        'analizador_deportivo': 'operativo',
+        'cache_datos': 'operativo' if ultimo_reporte else 'vacio',
+        'scheduler_automatico': 'activo',
+        'apis_externas': 'simuladas'  # En producción sería 'conectadas'
+    }
+    
+    # Información de rendimiento
+    tiempo_desde_actualizacion = None
+    if ultima_actualizacion:
+        tiempo_transcurrido = datetime.now() - ultima_actualizacion
+        tiempo_desde_actualizacion = str(tiempo_transcurrido).split('.')[0]  # Sin microsegundos
+    
+    return jsonify({
+        'status': 'healthy',
+        'sistema': 'Asistente Análisis Deportivo Profesional v3.0',
+        'version': '3.0.0',
+        'estado_general': 'operativo',
+        'componentes': estado_componentes,
+        'estadisticas': {
+            'ultima_actualizacion': ultima_actualizacion.isoformat() if ultima_actualizacion else None,
+            'tiempo_desde_actualizacion': tiempo_desde_actualizacion,
+            'partidos_en_cache': ultimo_reporte.get('total_partidos', 0) if ultimo_reporte else 0,
+            'deportes_soportados': len(analizador.deportes_soportados),
+            'actualizacion_automatica': 'cada 2 horas'
+        },
+        'endpoints_disponibles': {
+            'dashboard': '/',
+            'analisis_completo': '/api/analisis',
+            'recomendaciones': '/api/recomendaciones',
+            'por_deporte': '/api/deporte/{deporte}',
+            'todos_partidos': '/api/partidos',
+            'actualizar': 'POST /api/actualizar',
+            'estado_sistema': '/health'
+        },
+        'timestamp': datetime.now().isoformat(),
+        'servidor': 'Flask + Gunicorn',
+        'algoritmos_ia': [
+            'Análisis de forma reciente',
+            'Modelo de eficiencia ofensiva/defensiva',
+            'Cálculo de valor esperado',
+            'Evaluación de riesgo multi-factor'
+        ]
+    })
+
+@app.errorhandler(404)
+def not_found(error):
+    """Manejo de errores 404"""
+    return jsonify({
+        'status': 'error',
+        'message': 'Endpoint no encontrado',
+        'endpoints_disponibles': [
+            '/', '/api/analisis', '/api/recomendaciones', 
+            '/api/partidos', '/api/deporte/{deporte}', '/health'
+        ]
+    }), 404
+
+@app.errorhandler(500)
+def server_error(error):
+    """Manejo de errores 500"""
+    return jsonify({
+        'status': 'error',
+        'message': 'Error interno del servidor',
+        'contacto': 'Revise los logs para más información'
+    }), 500
+
+# Punto de entrada principal de la aplicación
+if __name__ == '__main__':
+    logger.info("🚀 Iniciando Asistente de Análisis Deportivo Profesional v3.0")
+    logger.info("🤖 Sistema de Inteligencia Artificial para predicciones deportivas")
+    logger.info("⚡ Funciones principales:")
+    logger.info("   • Dashboard web en tiempo real")
+    logger.info("   • API REST completa")
+    logger.info("   • Análisis multi-deporte")
+    logger.info("   • Cálculo de valor esperado")
+    logger.info("   • Actualización automática cada 2 horas")
+    logger.info("   • Sistema de niveles de riesgo")
+    logger.info("   • Algoritmos de Machine Learning")
+    
+    # Configuración del puerto (compatible con Render y otros servicios cloud)
+    PORT = int(os.environ.get('PORT', 5000))
+    
+    # Ejecutar aplicación
+    # En producción usa debug=False para mejor rendimiento y seguridad
+    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)# ASISTENTE DE ANÁLISIS DEPORTIVO PROFESIONAL v3.0 - VERSIÓN CORREGIDA
 # =====================================================================
 # Sistema completo de análisis predictivo con múltiples fuentes de datos
 
@@ -19,13 +564,13 @@ from dataclasses import dataclass
 import warnings
 warnings.filterwarnings('ignore')
 
-# Configurar logging
+# Configurar logging para monitorear el funcionamiento del sistema
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dataclass
 class Partido:
-    """Clase que representa un partido deportivo con toda su información"""
+    """Clase que representa un partido deportivo con toda su información necesaria para el análisis"""
     id: str
     deporte: str
     liga: str
@@ -67,6 +612,7 @@ class AnalizadorDeportivoProfesional:
         self.ultima_actualizacion = None
         
         # Factores de análisis con pesos específicos para cada deporte
+        # Estos pesos determinan qué tan importante es cada factor en el análisis final
         self.factores_analisis = {
             'forma_reciente': 0.30,              # 30% de peso - Rendimiento últimos partidos
             'enfrentamientos_directos': 0.25,    # 25% de peso - Historial entre equipos
@@ -394,7 +940,7 @@ class AnalizadorDeportivoProfesional:
         if not forma_reciente:
             return 50.0  # Valor neutro si no hay datos
         
-        # AQUÍ ESTABA EL ERROR: Esta línea debe estar correctamente indentada dentro de la función
+        # Asignar puntos según el resultado: Victoria=3, Empate=1, Derrota=0
         puntos = {'W': 3, 'D': 1, 'L': 0}
         total_puntos = sum(puntos.get(resultado, 0) for resultado in forma_reciente)
         max_puntos = len(forma_reciente) * 3
@@ -589,12 +1135,23 @@ class AnalizadorDeportivoProfesional:
         else:
             rendimiento_casa = 50.0
             
+        # AQUÍ ESTABA EL PROBLEMA ORIGINAL - Esta sección estaba cortada
         if stats['visitante']['partidos_visita'] > 0:
+            rendimiento_visita = (stats['visitante']['victorias_visita'] / stats['visitante']['partidos_visita']) * 100
             ataque_visitante = stats['visitante']['goles_favor_visita'] / stats['visitante']['partidos_visita']
             defensa_visitante = stats['visitante']['goles_contra_visita'] / stats['visitante']['partidos_visita']
         else:
+            rendimiento_visita = 30.0  # Penalización por jugar fuera
             ataque_visitante = 1.2
             defensa_visitante = 1.2
+        
+        # Análisis ofensivo y defensivo del equipo local
+        if stats['local']['partidos_casa'] > 0:
+            ataque_local = stats['local']['goles_favor_casa'] / stats['local']['partidos_casa']
+            defensa_local = stats['local']['goles_contra_casa'] / stats['local']['partidos_casa']
+        else:
+            ataque_local = 1.5
+            defensa_local = 1.0
         
         # Análisis de enfrentamientos directos históricos
         h2h = stats['enfrentamientos_directos']['ultimos_5']
@@ -957,678 +1514,3 @@ scheduler_thread.start()
 # Generar el primer reporte al iniciar la aplicación
 logger.info("🚀 Generando primer reporte al iniciar el sistema...")
 actualizar_analisis()
-
-@app.route('/')
-def dashboard():
-    """
-    Dashboard principal con interfaz web moderna y responsiva
-    Muestra el estado del sistema y las mejores oportunidades de apuesta
-    """
-    global ultimo_reporte, ultima_actualizacion
-    
-    # Asegurar que hay datos disponibles
-    if not ultimo_reporte:
-        logger.info("⚡ No hay reporte disponible, generando uno nuevo...")
-        actualizar_analisis()
-    
-    # Preparar datos para mostrar en el dashboard
-    ultima_act = ultima_actualizacion.strftime('%H:%M:%S') if ultima_actualizacion else 'N/A'
-    top_recomendaciones = ultimo_reporte.get('top_recomendaciones', [])[:3] if ultimo_reporte else []
-    
-    # Calcular estadísticas para mostrar
-    total_partidos = ultimo_reporte.get('total_partidos', 0) if ultimo_reporte else 0
-    deportes_count = len(ultimo_reporte.get('deportes_analizados', [])) if ultimo_reporte else 0
-    oportunidades = ultimo_reporte.get('mejores_oportunidades', 0) if ultimo_reporte else 0
-    confianza_prom = ultimo_reporte.get('resumen_estadistico', {}).get('confianza_promedio', 0) if ultimo_reporte else 0
-    
-    # Template HTML corregido y optimizado
-    html_template = """
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <title>🎯 Asistente Análisis Deportivo Profesional v3.0</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="refresh" content="30">
-        <style>
-            * { 
-                margin: 0; 
-                padding: 0; 
-                box-sizing: border-box; 
-            }
-            
-            body {
-                background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
-                color: white;
-                font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-                line-height: 1.6;
-                min-height: 100vh;
-            }
-            
-            .container { 
-                max-width: 1400px; 
-                margin: 0 auto; 
-                padding: 20px; 
-            }
-            
-            .header {
-                background: linear-gradient(45deg, #ff6b35, #f7931e);
-                padding: 30px;
-                border-radius: 20px;
-                text-align: center;
-                margin-bottom: 30px;
-                box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
-                animation: headerGlow 3s ease-in-out infinite alternate;
-            }
-            
-            @keyframes headerGlow {
-                from { box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3); }
-                to { box-shadow: 0 15px 40px rgba(255, 107, 53, 0.6); }
-            }
-            
-            .header h1 { 
-                font-size: 2.5em; 
-                margin-bottom: 10px; 
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.3); 
-                font-weight: 700;
-            }
-            
-            .header p { 
-                font-size: 1.2em; 
-                opacity: 0.9; 
-                margin: 5px 0;
-            }
-            
-            .stats-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                gap: 20px;
-                margin: 30px 0;
-            }
-            
-            .stat-card {
-                background: linear-gradient(135deg, rgba(22, 33, 62, 0.9), rgba(15, 15, 35, 0.9));
-                padding: 25px;
-                border-radius: 15px;
-                text-align: center;
-                border: 2px solid transparent;
-                transition: all 0.3s ease;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .stat-card:hover {
-                border-color: #00ff88;
-                transform: translateY(-5px);
-                box-shadow: 0 15px 35px rgba(0, 255, 136, 0.2);
-            }
-            
-            .stat-card::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: -100%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.1), transparent);
-                transition: left 0.5s;
-            }
-            
-            .stat-card:hover::before { 
-                left: 100%; 
-            }
-            
-            .stat-title { 
-                font-size: 0.9em; 
-                opacity: 0.8; 
-                margin-bottom: 10px; 
-            }
-            
-            .stat-value { 
-                font-size: 2.5em; 
-                font-weight: bold; 
-                margin: 15px 0; 
-                background: linear-gradient(45deg, #00ff88, #4fc3f7);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
-            }
-            
-            .recommendations {
-                background: linear-gradient(135deg, rgba(22, 33, 62, 0.8), rgba(15, 15, 35, 0.8));
-                padding: 30px;
-                border-radius: 20px;
-                margin: 30px 0;
-                border: 1px solid rgba(0, 255, 136, 0.3);
-            }
-            
-            .recommendations h3 {
-                color: #00ff88;
-                margin-bottom: 20px;
-                font-size: 1.5em;
-                text-align: center;
-            }
-            
-            .recommendation-item {
-                background: rgba(15, 15, 35, 0.6);
-                padding: 20px;
-                margin: 15px 0;
-                border-radius: 12px;
-                border-left: 4px solid #00ff88;
-                transition: all 0.3s ease;
-            }
-            
-            .recommendation-item:hover {
-                background: rgba(15, 15, 35, 0.9);
-                transform: translateX(10px);
-            }
-            
-            .match-info { 
-                font-size: 1.2em; 
-                font-weight: bold; 
-                color: #4fc3f7; 
-                margin-bottom: 10px; 
-            }
-            
-            .recommendation-text { 
-                font-size: 1.1em; 
-                color: #00ff88; 
-                margin: 8px 0; 
-                font-weight: bold;
-            }
-            
-            .details { 
-                font-size: 0.9em; 
-                opacity: 0.8; 
-                margin-top: 10px; 
-                line-height: 1.4;
-            }
-            
-            .risk-low { border-left-color: #00ff88; }
-            .risk-medium { border-left-color: #ffa726; }
-            .risk-high { border-left-color: #ff5252; }
-            
-            .api-info {
-                background: rgba(22, 33, 62, 0.6);
-                padding: 25px;
-                border-radius: 15px;
-                margin-top: 30px;
-            }
-            
-            .api-info h3 { 
-                color: #4fc3f7; 
-                margin-bottom: 15px; 
-            }
-            
-            .api-info p { 
-                margin: 8px 0; 
-                font-family: 'Courier New', monospace;
-                background: rgba(0,0,0,0.3);
-                padding: 8px;
-                border-radius: 5px;
-                font-size: 0.9em;
-            }
-            
-            .loading {
-                display: inline-block;
-                width: 20px;
-                height: 20px;
-                border: 3px solid rgba(255,255,255,.3);
-                border-radius: 50%;
-                border-top-color: #00ff88;
-                animation: spin 1s ease-in-out infinite;
-            }
-            
-            @keyframes spin { 
-                to { transform: rotate(360deg); } 
-            }
-            
-            .status-online { color: #00ff88; }
-            .status-offline { color: #ff5252; }
-            
-            .footer {
-                text-align: center;
-                margin-top: 40px;
-                padding: 20px;
-                opacity: 0.7;
-                font-size: 0.9em;
-            }
-            
-            @media (max-width: 768px) {
-                .container { padding: 10px; }
-                .header h1 { font-size: 2em; }
-                .header p { font-size: 1em; }
-                .stat-value { font-size: 2em; }
-                .stats-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>🎯 Asistente Análisis Deportivo Profesional</h1>
-                <p>Sistema de Inteligencia Artificial para Análisis Predictivo Deportivo v3.0</p>
-                <p>🤖 Powered by Advanced Sports Analytics & Machine Learning</p>
-                <p>⚡ Actualización automática cada 2 horas</p>
-            </div>
-            
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-title">Estado del Sistema</div>
-                    <div class="stat-value status-online">OPERATIVO</div>
-                    <div class="loading"></div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-title">Partidos Analizados</div>
-                    <div class="stat-value">{{ total_partidos }}</div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-title">Deportes Cubiertos</div>
-                    <div class="stat-value">{{ deportes_count }}</div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-title">Oportunidades Detectadas</div>
-                    <div class="stat-value">{{ oportunidades }}</div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-title">Última Actualización</div>
-                    <div class="stat-value" style="font-size: 1.8em; color: #4fc3f7;">{{ ultima_act }}</div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-title">Confianza Promedio IA</div>
-                    <div class="stat-value">{{ confianza_prom }}%</div>
-                </div>
-            </div>
-            
-            {% if top_recomendaciones %}
-            <div class="recommendations">
-                <h3>🚀 TOP RECOMENDACIONES - Mayor Valor Esperado</h3>
-                
-                {% for rec in top_recomendaciones %}
-                <div class="recommendation-item risk-{{ rec.analisis.recomendacion.nivel_riesgo.lower() }}">
-                    <div class="match-info">
-                        🏆 {{ rec.partido.enfrentamiento }} - {{ rec.partido.liga }}
-                    </div>
-                    
-                    <div class="recommendation-text">
-                        💡 {{ rec.analisis.recomendacion.recomendacion }}
-                    </div>
-                    
-                    <div class="details">
-                        📊 Valor Esperado: +{{ (rec.analisis.recomendacion.valor_esperado * 100) | round(1) }}%<br>
-                        🎯 Confianza IA: {{ rec.analisis.recomendacion.confianza }}%<br>
-                        ⚠️ Nivel de Riesgo: {{ rec.analisis.recomendacion.nivel_riesgo }}<br>
-                        💰 Odds Recomendada: {{ rec.analisis.recomendacion.odds_recomendada }}<br>
-                        📅 Fecha: {{ rec.partido.fecha_hora }}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-            
-            <div class="api-info">
-                <h3>📡 APIs y Endpoints Disponibles</h3>
-                <p><strong>GET /</strong> - Dashboard principal con interfaz web</p>
-                <p><strong>GET /api/analisis</strong> - Análisis completo en formato JSON</p>
-                <p><strong>GET /api/partidos</strong> - Lista todos los partidos disponibles</p>
-                <p><strong>GET /api/recomendaciones</strong> - Solo las mejores oportunidades</p>
-                <p><strong>GET /api/deporte/{deporte}</strong> - Análisis filtrado por deporte</p>
-                <p><strong>GET /health</strong> - Estado y diagnóstico del sistema</p>
-                <p><strong>POST /api/actualizar</strong> - Forzar actualización manual</p>
-            </div>
-            
-            <div class="footer">
-                <p>🔬 Algoritmos de IA: Análisis de forma, eficiencia ofensiva/defensiva, valor esperado</p>
-                <p>📊 Fuentes: APIs deportivas, estadísticas históricas, análisis de mercado</p>
-                <p>⚡ Sistema optimizado para detección de oportunidades de valor</p>
-                <p>🎯 Desarrollado con Python, Flask, NumPy, Pandas y Machine Learning</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    # Renderizar template con datos dinámicos usando una función auxiliar personalizada
-    def render_custom_template(template, **kwargs):
-        """Función auxiliar para renderizar templates sin Jinja2 completo"""
-        for key, value in kwargs.items():
-            template = template.replace('{{ ' + key + ' }}', str(value))
-        
-        # Manejar loops simples para recomendaciones
-        if top_recomendaciones:
-            rec_html = ""
-            for rec in top_recomendaciones:
-                rec_item = f"""
-                <div class="recommendation-item risk-{rec['analisis']['recomendacion']['nivel_riesgo'].lower()}">
-                    <div class="match-info">
-                        🏆 {rec['partido']['enfrentamiento']} - {rec['partido']['liga']}
-                    </div>
-                    
-                    <div class="recommendation-text">
-                        💡 {rec['analisis']['recomendacion']['recomendacion']}
-                    </div>
-                    
-                    <div class="details">
-                        📊 Valor Esperado: +{round(rec['analisis']['recomendacion']['valor_esperado'] * 100, 1)}%<br>
-                        🎯 Confianza IA: {rec['analisis']['recomendacion']['confianza']}%<br>
-                        ⚠️ Nivel de Riesgo: {rec['analisis']['recomendacion']['nivel_riesgo']}<br>
-                        💰 Odds Recomendada: {rec['analisis']['recomendacion']['odds_recomendada']}<br>
-                        📅 Fecha: {rec['partido']['fecha_hora']}
-                    </div>
-                </div>
-                """
-                rec_html += rec_item
-            
-            # Reemplazar el bloque completo de recomendaciones
-            rec_section = f"""
-            <div class="recommendations">
-                <h3>🚀 TOP RECOMENDACIONES - Mayor Valor Esperado</h3>
-                {rec_html}
-            </div>
-            """
-            template = template.replace('{% if top_recomendaciones %}', '').replace('{% endif %}', '')
-            template = template.replace('{% for rec in top_recomendaciones %}', '').replace('{% endfor %}', '')
-            template = template.replace('<div class="recommendations">', rec_section).replace('</div>\n            {% endif %}', '')
-        else:
-            # Si no hay recomendaciones, remover toda la sección
-            import re
-            pattern = r'{% if top_recomendaciones %}.*?{% endif %}'
-            template = re.sub(pattern, '', template, flags=re.DOTALL)
-        
-        return template
-    
-    # Renderizar template con datos dinámicos
-    return render_custom_template(
-        html_template,
-        total_partidos=total_partidos,
-        deportes_count=deportes_count,
-        oportunidades=oportunidades,
-        confianza_prom=confianza_prom,
-        ultima_act=ultima_act
-    )
-
-@app.route('/api/analisis')
-def api_analisis_completo():
-    """
-    API REST: Devuelve el análisis completo en formato JSON
-    Ideal para integración con otras aplicaciones
-    """
-    global ultimo_reporte
-    
-    if not ultimo_reporte:
-        logger.info("⚡ Generando análisis para API...")
-        actualizar_analisis()
-    
-    return jsonify({
-        'status': 'success',
-        'data': ultimo_reporte,
-        'sistema': 'Asistente Análisis Deportivo Profesional v3.0',
-        'endpoints_disponibles': [
-            '/api/analisis', '/api/recomendaciones', '/api/partidos', 
-            '/api/deporte/{deporte}', '/health', '/api/actualizar'
-        ]
-    })
-
-@app.route('/api/recomendaciones')
-def api_recomendaciones():
-    """
-    API REST: Devuelve solo las mejores recomendaciones
-    Formato optimizado para sistemas de alertas
-    """
-    global ultimo_reporte
-    
-    if not ultimo_reporte:
-        return jsonify({
-            'status': 'error', 
-            'message': 'No hay datos disponibles. Intente más tarde.'
-        }), 503
-    
-    top_recs = ultimo_reporte.get('top_recomendaciones', [])
-    
-    # Formatear recomendaciones para fácil consumo
-    recomendaciones_formateadas = []
-    for rec in top_recs:
-        recomendaciones_formateadas.append({
-            'id': rec['partido']['id'],
-            'partido': rec['partido']['enfrentamiento'],
-            'liga': rec['partido']['liga'],
-            'deporte': rec['partido'].get('deporte', 'N/A'),
-            'fecha_hora': rec['partido']['fecha_hora'],
-            'recomendacion': rec['analisis']['recomendacion']['recomendacion'],
-            'probabilidad_estimada': rec['analisis']['recomendacion']['probabilidad_estimada'],
-            'valor_esperado': rec['analisis']['recomendacion']['valor_esperado'],
-            'valor_esperado_porcentaje': round(rec['analisis']['recomendacion']['valor_esperado'] * 100, 1),
-            'confianza_ia': rec['analisis']['recomendacion']['confianza'],
-            'nivel_riesgo': rec['analisis']['recomendacion']['nivel_riesgo'],
-            'odds_recomendada': rec['analisis']['recomendacion']['odds_recomendada'],
-            'justificacion': rec['analisis']['recomendacion'].get('justificacion', ''),
-            'factores_clave': rec['analisis'].get('factores_clave', [])
-        })
-    
-    return jsonify({
-        'status': 'success',
-        'timestamp': datetime.now().isoformat(),
-        'total_recomendaciones': len(recomendaciones_formateadas),
-        'recomendaciones': recomendaciones_formateadas,
-        'criterio_seleccion': 'Valor esperado mínimo: 5%',
-        'algoritmo': 'IA Multi-factor con Machine Learning'
-    })
-
-@app.route('/api/deporte/<deporte>')
-def api_por_deporte(deporte):
-    """
-    API REST: Análisis filtrado por deporte específico
-    Útil para aplicaciones especializadas en un solo deporte
-    """
-    global ultimo_reporte
-    
-    if not ultimo_reporte:
-        return jsonify({
-            'status': 'error', 
-            'message': 'No hay datos disponibles'
-        }), 503
-    
-    # Filtrar análisis por deporte solicitado
-    analisis_completo = ultimo_reporte.get('analisis_detallado', [])
-    analisis_deporte = [
-        a for a in analisis_completo 
-        if a['partido'].get('deporte', '').lower() == deporte.lower()
-    ]
-    
-    if not analisis_deporte:
-        return jsonify({
-            'status': 'error',
-            'message': f'No se encontraron partidos para el deporte: {deporte}',
-            'deportes_disponibles': list(set(
-                a['partido'].get('deporte', 'N/A') 
-                for a in analisis_completo
-            ))
-        }), 404
-    
-    # Calcular estadísticas específicas del deporte
-    valores_esperados = [a['analisis']['recomendacion']['valor_esperado'] for a in analisis_deporte]
-    mejores_del_deporte = [a for a in analisis_deporte if a['analisis']['recomendacion']['valor_esperado'] > 0.05]
-    
-    return jsonify({
-        'status': 'success',
-        'deporte': deporte.title(),
-        'total_partidos': len(analisis_deporte),
-        'oportunidades_valor': len(mejores_del_deporte),
-        'valor_esperado_promedio': round(np.mean(valores_esperados) if valores_esperados else 0, 3),
-        'partidos': analisis_deporte,
-        'mejores_oportunidades': sorted(mejores_del_deporte, 
-                                       key=lambda x: x['analisis']['recomendacion']['valor_esperado'], 
-                                       reverse=True)
-    })
-
-@app.route('/api/partidos')
-def api_partidos():
-    """
-    API REST: Lista completa de todos los partidos analizados
-    Incluye información básica sin análisis detallado
-    """
-    global ultimo_reporte
-    
-    if not ultimo_reporte:
-        return jsonify({
-            'status': 'error', 
-            'message': 'No hay datos disponibles'
-        }), 503
-    
-    # Extraer información básica de partidos
-    partidos_info = []
-    for analisis in ultimo_reporte.get('analisis_detallado', []):
-        partido_info = analisis['partido'].copy()
-        partido_info['tiene_valor'] = analisis['analisis']['recomendacion']['valor_esperado'] > 0.05
-        partido_info['confianza'] = analisis['analisis']['confianza_general']
-        partido_info['nivel_riesgo'] = analisis['analisis']['recomendacion']['nivel_riesgo']
-        partidos_info.append(partido_info)
-    
-    return jsonify({
-        'status': 'success',
-        'timestamp': ultimo_reporte['timestamp'],
-        'total_partidos': ultimo_reporte.get('total_partidos', 0),
-        'deportes_disponibles': ultimo_reporte.get('deportes_analizados', []),
-        'partidos': partidos_info,
-        'resumen': ultimo_reporte.get('resumen_estadistico', {}),
-        'version_sistema': ultimo_reporte.get('version_sistema', '3.0')
-    })
-
-@app.route('/api/actualizar', methods=['POST'])
-def api_actualizar_manual():
-    """
-    API REST: Fuerza una actualización manual del análisis
-    Útil para obtener datos frescos antes del ciclo automático
-    """
-    try:
-        logger.info("🔄 Actualización manual solicitada vía API...")
-        actualizar_analisis()
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Análisis actualizado manualmente con éxito',
-            'timestamp': datetime.now().isoformat(),
-            'partidos_analizados': ultimo_reporte.get('total_partidos', 0) if ultimo_reporte else 0,
-            'proxima_actualizacion_automatica': 'En 2 horas'
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ Error en actualización manual: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': f'Error durante la actualización: {str(e)}',
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-@app.route('/health')
-def health_check():
-    """
-    Endpoint de diagnóstico y estado del sistema
-    Útil para monitoreo y debugging
-    """
-    global ultimo_reporte, ultima_actualizacion
-    
-    # Verificar estado de componentes
-    estado_componentes = {
-        'analizador_deportivo': 'operativo',
-        'cache_datos': 'operativo' if ultimo_reporte else 'vacio',
-        'scheduler_automatico': 'activo',
-        'apis_externas': 'simuladas'  # En producción sería 'conectadas'
-    }
-    
-    # Información de rendimiento
-    tiempo_desde_actualizacion = None
-    if ultima_actualizacion:
-        tiempo_transcurrido = datetime.now() - ultima_actualizacion
-        tiempo_desde_actualizacion = str(tiempo_transcurrido).split('.')[0]  # Sin microsegundos
-    
-    return jsonify({
-        'status': 'healthy',
-        'sistema': 'Asistente Análisis Deportivo Profesional v3.0',
-        'version': '3.0.0',
-        'estado_general': 'operativo',
-        'componentes': estado_componentes,
-        'estadisticas': {
-            'ultima_actualizacion': ultima_actualizacion.isoformat() if ultima_actualizacion else None,
-            'tiempo_desde_actualizacion': tiempo_desde_actualizacion,
-            'partidos_en_cache': ultimo_reporte.get('total_partidos', 0) if ultimo_reporte else 0,
-            'deportes_soportados': len(analizador.deportes_soportados),
-            'actualizacion_automatica': 'cada 2 horas'
-        },
-        'endpoints_disponibles': {
-            'dashboard': '/',
-            'analisis_completo': '/api/analisis',
-            'recomendaciones': '/api/recomendaciones',
-            'por_deporte': '/api/deporte/{deporte}',
-            'todos_partidos': '/api/partidos',
-            'actualizar': 'POST /api/actualizar',
-            'estado_sistema': '/health'
-        },
-        'timestamp': datetime.now().isoformat(),
-        'servidor': 'Flask + Gunicorn',
-        'algoritmos_ia': [
-            'Análisis de forma reciente',
-            'Modelo de eficiencia ofensiva/defensiva',
-            'Cálculo de valor esperado',
-            'Evaluación de riesgo multi-factor'
-        ]
-    })
-
-@app.errorhandler(404)
-def not_found(error):
-    """Manejo de errores 404"""
-    return jsonify({
-        'status': 'error',
-        'message': 'Endpoint no encontrado',
-        'endpoints_disponibles': [
-            '/', '/api/analisis', '/api/recomendaciones', 
-            '/api/partidos', '/api/deporte/{deporte}', '/health'
-        ]
-    }), 404
-
-@app.errorhandler(500)
-def server_error(error):
-    """Manejo de errores 500"""
-    return jsonify({
-        'status': 'error',
-        'message': 'Error interno del servidor',
-        'contacto': 'Revise los logs para más información'
-    }), 500
-
-# Punto de entrada principal de la aplicación
-if __name__ == '__main__':
-    logger.info("🚀 Iniciando Asistente de Análisis Deportivo Profesional v3.0")
-    logger.info("🤖 Sistema de Inteligencia Artificial para predicciones deportivas")
-    logger.info("⚡ Funciones principales:")
-    logger.info("   • Dashboard web en tiempo real")
-    logger.info("   • API REST completa")
-    logger.info("   • Análisis multi-deporte")
-    logger.info("   • Cálculo de valor esperado")
-    logger.info("   • Actualización automática cada 2 horas")
-    logger.info("   • Sistema de niveles de riesgo")
-    logger.info("   • Algoritmos de Machine Learning")
-    
-    # Configuración del puerto (compatible con Render y otros servicios cloud)
-    PORT = int(os.environ.get('PORT', 5000))
-    
-    # Ejecutar aplicación
-    # En producción usa debug=False para mejor rendimiento
-    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)visita'] > 0:
-            rendimiento_visita = (stats['visitante']['victorias_visita'] / stats['visitante']['partidos_visita']) * 100
-        else:
-            rendimiento_visita = 30.0  # Penalización por jugar fuera
-        
-        # Análisis ofensivo y defensivo
-        if stats['local']['partidos_casa'] > 0:
-            ataque_local = stats['local']['goles_favor_casa'] / stats['local']['partidos_casa']
-            defensa_local = stats['local']['goles_contra_casa'] / stats['local']['partidos_casa']
-        else:
-            ataque_local = 1.5
-            defensa_local = 1.0
-            
-        if stats['visitante']['partidos_
