@@ -1,84 +1,44 @@
 import os
-import random
-from datetime import datetime, timedelta
+import requests
 from flask import Flask, jsonify, render_template_string
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 
-# Simulación de partidos y análisis sencillo
-def partidos_demo():
-    ahora = datetime.now()
-    partidos = [
-        {
-            "id": 1,
-            "deporte": "Fútbol",
-            "liga": "Liga BetPlay",
-            "local": "Millonarios",
-            "visitante": "Nacional",
-            "fecha_hora": (ahora + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M'),
-            "ciudad": "Bogotá"
-        },
-        {
-            "id": 2,
-            "deporte": "Basketball",
-            "liga": "NBA",
-            "local": "Lakers",
-            "visitante": "Warriors",
-            "fecha_hora": (ahora + timedelta(hours=5)).strftime('%Y-%m-%d %H:%M'),
-            "ciudad": "Los Angeles"
-        },
-        {
-            "id": 3,
-            "deporte": "Tennis",
-            "liga": "Wimbledon",
-            "local": "Djokovic",
-            "visitante": "Alcaraz",
-            "fecha_hora": (ahora + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M'),
-            "ciudad": "London"
-        }
-    ]
-    return partidos
-
-def analizar_partido(partido):
-    # Análisis DEMO por deporte
-    random.seed(partido["id"])
-    if partido["deporte"] == "Fútbol":
-        prob_local = round(random.uniform(0.35, 0.55), 2)
-        prob_empate = round(random.uniform(0.2, 0.35), 2)
-        prob_visitante = round(1 - prob_local - prob_empate, 2)
-        recomendacion = (
-            "Partido parejo. Se sugiere doble oportunidad local/empate." if prob_local > prob_visitante
-            else "El visitante puede sorprender. Cuidado con el empate."
-        )
-    elif partido["deporte"] == "Basketball":
-        prob_local = round(random.uniform(0.55, 0.70), 2)
-        prob_empate = 0.00
-        prob_visitante = round(1 - prob_local, 2)
-        recomendacion = (
-            "El local tiene ventaja clara por su ofensiva." if prob_local > 0.6
-            else "Juego cerrado, mejor evitar apostar."
-        )
-    elif partido["deporte"] == "Tennis":
-        prob_local = round(random.uniform(0.45, 0.65), 2)
-        prob_empate = 0.00
-        prob_visitante = round(1 - prob_local, 2)
-        recomendacion = (
-            f"Favorito: {partido['local']}" if prob_local > prob_visitante
-            else f"Favorito: {partido['visitante']}"
-        )
-    else:
-        prob_local = prob_empate = prob_visitante = 0.33
-        recomendacion = "Sin datos suficientes."
-    return {
-        "prob_local": prob_local,
-        "prob_empate": prob_empate,
-        "prob_visitante": prob_visitante,
-        "recomendacion": recomendacion
+# === FUNCIÓN PARA OBTENER PARTIDOS REALES DE LA API ===
+def partidos_reales():
+    url = "https://free-api-live-football-data.p.rapidapi.com/football-get-all-matches-by-leagueid"
+    querystring = {"leagueid": "42"}  # Premier League Inglaterra (puedes cambiar por otra liga)
+    headers = {
+        "X-RapidAPI-Key": "c520762708mshf386c8dfe0d3d57p107df4jsn5bf238e95d35",
+        "X-RapidAPI-Host": "free-api-live-football-data.p.rapidapi.com"
     }
+    try:
+        resp = requests.get(url, headers=headers, params=querystring, timeout=10)
+        data = resp.json()
+        partidos = []
+        for item in data.get("result", []):
+            partidos.append({
+                "deporte": "Fútbol",
+                "liga": item.get("league_name", "Desconocida"),
+                "local": item.get("event_home_team", "Local"),
+                "visitante": item.get("event_away_team", "Visitante"),
+                "fecha_hora": item.get("event_date", "Sin Fecha") + " " + item.get("event_time", ""),
+                "ciudad": item.get("country_name", "N/A"),
+                "analisis": {
+                    "prob_local": "N/A",
+                    "prob_empate": "N/A",
+                    "prob_visitante": "N/A",
+                    "recomendacion": "Datos reales: análisis no disponible en modo demo."
+                }
+            })
+        return partidos
+    except Exception as e:
+        print(f"Error obteniendo datos reales: {e}")
+        return []
 
-# --------- DASHBOARD HTML ---------
+# === DASHBOARD HTML ===
 dashboard_html = """
 <!DOCTYPE html>
 <html>
@@ -100,89 +60,54 @@ dashboard_html = """
 </head>
 <body>
   <div class="card">
-    <h1>🎯 Asistente de Análisis Deportivo</h1>
+    <h1>🎯 Asistente de Análisis Deportivo (Datos Reales)</h1>
     <p>
-      Análisis automático de partidos de fútbol, basketball y tennis.<br>
-      <span style="color:#00BFFF">Predicciones y recomendaciones para apostar mejor.</span>
+      Mostrando partidos reales (Premier League) en vivo desde la API.<br>
+      <span style="color:#00BFFF">¡Ya tienes datos reales en tu dashboard Flask + RapidAPI!</span>
     </p>
-    <h2>Partidos Próximos (DEMO)</h2>
+    <h2>Partidos Próximos</h2>
     <table>
       <tr>
         <th>Deporte</th>
         <th>Partido</th>
         <th>Fecha/Hora</th>
-        <th>Análisis</th>
+        <th>Liga</th>
+        <th>Ciudad</th>
         <th>Recomendación</th>
       </tr>
       {% for p in partidos %}
       <tr>
         <td><span class="tag">{{p.deporte}}</span></td>
-        <td>
-          {% if p.deporte == "Tennis" %}
-            {{p.local}} vs {{p.visitante}}
-          {% else %}
-            {{p.local}} <b>vs</b> {{p.visitante}}<br>
-            <small>{{p.liga}}</small>
-          {% endif %}
-        </td>
+        <td>{{p.local}} <b>vs</b> {{p.visitante}}</td>
         <td>{{p.fecha_hora}}</td>
-        <td>
-          Local: {{p.analisis.prob_local*100}}%<br>
-          {% if p.deporte == "Fútbol" %}Empate: {{p.analisis.prob_empate*100}}%<br>{% endif %}
-          Visitante: {{p.analisis.prob_visitante*100}}%
-        </td>
+        <td>{{p.liga}}</td>
+        <td>{{p.ciudad}}</td>
         <td class="reco">{{p.analisis.recomendacion}}</td>
       </tr>
       {% endfor %}
     </table>
     <div class="footer">
       API disponible:<br>
-      <a href='/api/analisis'>/api/analisis</a> | 
-      <a href='/api/recomendaciones'>/api/recomendaciones</a> | 
       <a href='/api/partidos'>/api/partidos</a>
       <br><br>
-      © 2025 Asistente Deportivo Pro - DEMO Render
+      © 2025 Asistente Deportivo Pro - Flask + RapidAPI
     </div>
   </div>
 </body>
 </html>
 """
 
-# --------- FLASK ENDPOINTS ---------
+# === FLASK ENDPOINTS ===
 
 @app.route('/')
 def dashboard():
-    partidos = partidos_demo()
-    for p in partidos:
-        p["analisis"] = analizar_partido(p)
+    partidos = partidos_reales()
     return render_template_string(dashboard_html, partidos=partidos)
 
 @app.route('/api/partidos')
 def api_partidos():
-    partidos = partidos_demo()
+    partidos = partidos_reales()
     return jsonify(partidos)
-
-@app.route('/api/analisis')
-def api_analisis():
-    partidos = partidos_demo()
-    analisis = []
-    for p in partidos:
-        resultado = {"partido": f"{p['local']} vs {p['visitante']} ({p['deporte']})"}
-        resultado.update(analizar_partido(p))
-        analisis.append(resultado)
-    return jsonify(analisis)
-
-@app.route('/api/recomendaciones')
-def api_recomendaciones():
-    partidos = partidos_demo()
-    recomendaciones = [
-        {
-            "partido": f"{p['local']} vs {p['visitante']} ({p['deporte']})",
-            "recomendacion": analizar_partido(p)["recomendacion"]
-        }
-        for p in partidos
-    ]
-    return jsonify(recomendaciones)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
