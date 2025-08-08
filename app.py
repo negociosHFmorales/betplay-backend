@@ -1,4 +1,401 @@
-puntos = {'W': 3, 'D': 1, 'L': 0}
+# ASISTENTE DE ANÁLISIS DEPORTIVO PROFESIONAL v3.0 - VERSIÓN CORREGIDA
+# =====================================================================
+# Sistema completo de análisis predictivo con múltiples fuentes de datos
+
+import os
+import requests
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+import logging
+import json
+from typing import Dict, List, Any
+import schedule
+import time
+from flask import Flask, jsonify, render_template_string
+from flask_cors import CORS
+import threading
+from dataclasses import dataclass
+import warnings
+warnings.filterwarnings('ignore')
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@dataclass
+class Partido:
+    """Clase que representa un partido deportivo con toda su información"""
+    id: str
+    deporte: str
+    liga: str
+    equipo_local: str
+    equipo_visitante: str
+    fecha_hora: datetime
+    odds_local: float
+    odds_empate: float
+    odds_visitante: float
+    estadisticas: Dict
+    prediccion: Dict = None
+
+class AnalizadorDeportivoProfesional:
+    """Asistente de análisis deportivo con múltiples fuentes de datos y algoritmos de IA"""
+    
+    def __init__(self):
+        logger.info("🚀 Iniciando Asistente de Análisis Deportivo Profesional v3.0")
+        
+        # Configuración de APIs disponibles (muchas tienen versiones gratuitas)
+        self.apis = {
+            'api_football': {
+                'url': 'https://v3.football.api-sports.io',
+                'headers': {'x-rapidapi-key': 'TU_API_KEY_AQUI'},
+                'limite_gratuito': 100  # requests por día
+            },
+            'sportmonks': {
+                'url': 'https://soccer.sportmonks.com/api/v2.0',
+                'token': 'TU_TOKEN_AQUI'
+            },
+            'the_odds_api': {
+                'url': 'https://api.the-odds-api.com/v4',
+                'key': 'TU_KEY_AQUI'
+            }
+        }
+        
+        # Cache para almacenar datos y optimizar rendimiento
+        self.cache_partidos = []
+        self.cache_estadisticas = {}
+        self.ultima_actualizacion = None
+        
+        # Factores de análisis con pesos específicos para cada deporte
+        self.factores_analisis = {
+            'forma_reciente': 0.30,              # 30% de peso - Rendimiento últimos partidos
+            'enfrentamientos_directos': 0.25,    # 25% de peso - Historial entre equipos
+            'estadisticas_casa_visita': 0.20,    # 20% de peso - Rendimiento en casa/visita
+            'lesiones_suspensiones': 0.15,       # 15% de peso - Bajas importantes
+            'valor_odds': 0.10                   # 10% de peso - Análisis del mercado
+        }
+        
+        # Deportes soportados por el sistema
+        self.deportes_soportados = [
+            'futbol', 'basketball', 'tennis', 'baseball', 
+            'hockey', 'americano', 'voleibol', 'handball'
+        ]
+
+    def obtener_partidos_siguientes_12h(self) -> List[Partido]:
+        """
+        Obtiene todos los partidos de las próximas 12 horas de múltiples deportes
+        
+        Returns:
+            List[Partido]: Lista de partidos con toda la información necesaria
+        """
+        logger.info("📅 Obteniendo partidos de las próximas 12 horas...")
+        
+        partidos = []
+        fecha_inicio = datetime.now()
+        fecha_fin = fecha_inicio + timedelta(hours=12)
+        
+        try:
+            # Combinar datos de múltiples deportes
+            partidos_futbol = self._obtener_partidos_futbol(fecha_inicio, fecha_fin)
+            partidos_basketball = self._obtener_partidos_basketball(fecha_inicio, fecha_fin)
+            partidos_tennis = self._obtener_partidos_tennis(fecha_inicio, fecha_fin)
+            
+            # Agregar todos los partidos a la lista principal
+            partidos.extend(partidos_futbol)
+            partidos.extend(partidos_basketball)
+            partidos.extend(partidos_tennis)
+            
+            logger.info(f"✅ {len(partidos)} partidos obtenidos exitosamente")
+            return partidos
+            
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo partidos: {e}")
+            return self._generar_partidos_demo()
+
+    def _obtener_partidos_futbol(self, inicio, fin) -> List[Partido]:
+        """
+        Obtiene partidos de fútbol con datos realistas
+        En una implementación real, aquí se conectaría a las APIs de deportes
+        """
+        partidos = []
+        
+        # Ligas más importantes del mundo
+        ligas_importantes = [
+            'Liga BetPlay DIMAYOR', 'Premier League', 'La Liga', 
+            'Serie A', 'Bundesliga', 'Ligue 1', 'Copa Libertadores',
+            'Champions League', 'Europa League'
+        ]
+        
+        # Equipos colombianos más populares
+        equipos_colombia = [
+            'Atlético Nacional', 'Millonarios', 'Junior', 'América de Cali',
+            'Santa Fe', 'Deportivo Cali', 'Once Caldas', 'Medellín',
+            'Tolima', 'Pereira', 'Bucaramanga', 'Pasto'
+        ]
+        
+        # Equipos europeos de élite
+        equipos_europa = [
+            'Real Madrid', 'Barcelona', 'Manchester City', 'Liverpool',
+            'Bayern Munich', 'PSG', 'Juventus', 'AC Milan',
+            'Arsenal', 'Chelsea', 'Inter Milan', 'Atletico Madrid'
+        ]
+        
+        # Generar 6 partidos de fútbol con datos realistas
+        for i in range(6):
+            liga = np.random.choice(ligas_importantes)
+            
+            # Seleccionar equipos según la liga
+            if 'Colombia' in liga or 'BetPlay' in liga:
+                equipos = equipos_colombia
+            else:
+                equipos = equipos_europa
+            
+            local = np.random.choice(equipos)
+            visitante = np.random.choice([e for e in equipos if e != local])
+            
+            # Generar odds más realistas basadas en probabilidades del mercado
+            odds_local = round(np.random.uniform(1.5, 3.8), 2)
+            odds_visitante = round(np.random.uniform(1.5, 3.8), 2)
+            odds_empate = round(np.random.uniform(2.8, 4.2), 2)
+            
+            # Crear objeto partido con toda la información
+            partido = Partido(
+                id=f"fut_{i+1}",
+                deporte="fútbol",
+                liga=liga,
+                equipo_local=local,
+                equipo_visitante=visitante,
+                fecha_hora=inicio + timedelta(hours=np.random.randint(1, 12)),
+                odds_local=odds_local,
+                odds_empate=odds_empate,
+                odds_visitante=odds_visitante,
+                estadisticas=self._generar_estadisticas_futbol(local, visitante),
+                prediccion={}
+            )
+            
+            partidos.append(partido)
+        
+        return partidos
+
+    def _obtener_partidos_basketball(self, inicio, fin) -> List[Partido]:
+        """Obtiene partidos de basketball de diferentes ligas"""
+        partidos = []
+        
+        ligas = ['NBA', 'Liga Profesional Colombia', 'EuroLeague', 'NCAA']
+        equipos_nba = ['Lakers', 'Warriors', 'Celtics', 'Heat', 'Bulls', 'Knicks', 'Nets', 'Bucks']
+        equipos_col = ['Titanes', 'Cimarrones', 'Piratas', 'Búcaros', 'Cafeteros', 'Condores']
+        
+        # Generar 3 partidos de basketball
+        for i in range(3):
+            liga = np.random.choice(ligas)
+            equipos = equipos_nba if liga == 'NBA' else equipos_col
+            
+            local = np.random.choice(equipos)
+            visitante = np.random.choice([e for e in equipos if e != local])
+            
+            # En basketball no hay empate, solo dos opciones
+            odds_local = round(np.random.uniform(1.4, 2.8), 2)
+            odds_visitante = round(np.random.uniform(1.4, 2.8), 2)
+            
+            partido = Partido(
+                id=f"bas_{i+1}",
+                deporte="basketball",
+                liga=liga,
+                equipo_local=local,
+                equipo_visitante=visitante,
+                fecha_hora=inicio + timedelta(hours=np.random.randint(1, 12)),
+                odds_local=odds_local,
+                odds_empate=0,  # No hay empate en basketball
+                odds_visitante=odds_visitante,
+                estadisticas=self._generar_estadisticas_basketball(local, visitante),
+                prediccion={}
+            )
+            
+            partidos.append(partido)
+        
+        return partidos
+
+    def _obtener_partidos_tennis(self, inicio, fin) -> List[Partido]:
+        """Obtiene partidos de tennis de diferentes torneos"""
+        partidos = []
+        
+        torneos = ['ATP Masters', 'WTA 1000', 'Roland Garros', 'Wimbledon', 'US Open', 'Australian Open']
+        jugadores = [
+            'Djokovic', 'Nadal', 'Alcaraz', 'Medvedev', 'Tsitsipas', 
+            'Rublev', 'Zverev', 'Sinner', 'Ruud', 'Hurkacz'
+        ]
+        
+        # Generar 2 partidos de tennis
+        for i in range(2):
+            torneo = np.random.choice(torneos)
+            jugador1 = np.random.choice(jugadores)
+            jugador2 = np.random.choice([j for j in jugadores if j != jugador1])
+            
+            # En tennis tampoco hay empate
+            odds_j1 = round(np.random.uniform(1.3, 3.5), 2)
+            odds_j2 = round(np.random.uniform(1.3, 3.5), 2)
+            
+            partido = Partido(
+                id=f"ten_{i+1}",
+                deporte="tennis",
+                liga=torneo,
+                equipo_local=jugador1,
+                equipo_visitante=jugador2,
+                fecha_hora=inicio + timedelta(hours=np.random.randint(1, 12)),
+                odds_local=odds_j1,
+                odds_empate=0,  # No hay empate en tennis
+                odds_visitante=odds_j2,
+                estadisticas=self._generar_estadisticas_tennis(jugador1, jugador2),
+                prediccion={}
+            )
+            
+            partidos.append(partido)
+        
+        return partidos
+
+    def _generar_estadisticas_futbol(self, local, visitante) -> Dict:
+        """
+        Genera estadísticas realistas para fútbol basadas en datos típicos del deporte
+        
+        Returns:
+            Dict: Estadísticas completas de ambos equipos
+        """
+        return {
+            'local': {
+                'forma_reciente': [np.random.choice(['W', 'D', 'L']) for _ in range(5)],
+                'goles_favor_casa': np.random.randint(8, 25),
+                'goles_contra_casa': np.random.randint(3, 18),
+                'partidos_casa': np.random.randint(8, 15),
+                'victorias_casa': np.random.randint(4, 12),
+                'lesionados': np.random.randint(0, 4),
+                'suspendidos': np.random.randint(0, 2),
+                'posesion_promedio': round(np.random.uniform(42, 65), 1),
+                'tiros_por_partido': round(np.random.uniform(8, 18), 1)
+            },
+            'visitante': {
+                'forma_reciente': [np.random.choice(['W', 'D', 'L']) for _ in range(5)],
+                'goles_favor_visita': np.random.randint(6, 22),
+                'goles_contra_visita': np.random.randint(5, 20),
+                'partidos_visita': np.random.randint(8, 15),
+                'victorias_visita': np.random.randint(2, 10),
+                'lesionados': np.random.randint(0, 4),
+                'suspendidos': np.random.randint(0, 2),
+                'posesion_promedio': round(np.random.uniform(35, 58), 1),
+                'tiros_por_partido': round(np.random.uniform(6, 16), 1)
+            },
+            'enfrentamientos_directos': {
+                'ultimos_5': [np.random.choice(['L', 'E', 'V']) for _ in range(5)],
+                'goles_local_promedio': round(np.random.uniform(0.8, 2.5), 1),
+                'goles_visitante_promedio': round(np.random.uniform(0.6, 2.2), 1),
+                'total_partidos': np.random.randint(8, 20)
+            }
+        }
+
+    def _generar_estadisticas_basketball(self, local, visitante) -> Dict:
+        """Genera estadísticas realistas para basketball"""
+        return {
+            'local': {
+                'puntos_promedio_casa': np.random.randint(105, 125),
+                'puntos_contra_casa': np.random.randint(95, 120),
+                'victorias_casa': np.random.randint(15, 25),
+                'derrotas_casa': np.random.randint(5, 15),
+                'porcentaje_tiros': round(np.random.uniform(42, 52), 1),
+                'rebotes_promedio': round(np.random.uniform(40, 50), 1),
+                'asistencias_promedio': round(np.random.uniform(20, 30), 1)
+            },
+            'visitante': {
+                'puntos_promedio_visita': np.random.randint(100, 120),
+                'puntos_contra_visita': np.random.randint(98, 125),
+                'victorias_visita': np.random.randint(12, 22),
+                'derrotas_visita': np.random.randint(8, 18),
+                'porcentaje_tiros': round(np.random.uniform(40, 50), 1),
+                'rebotes_promedio': round(np.random.uniform(38, 48), 1),
+                'asistencias_promedio': round(np.random.uniform(18, 28), 1)
+            }
+        }
+
+    def _generar_estadisticas_tennis(self, j1, j2) -> Dict:
+        """Genera estadísticas realistas para tennis"""
+        return {
+            'jugador1': {
+                'ranking': np.random.randint(1, 100),
+                'victorias_año': np.random.randint(15, 45),
+                'derrotas_año': np.random.randint(5, 20),
+                'sets_ganados': np.random.randint(80, 150),
+                'superficie_favorita': np.random.choice(['Clay', 'Hard', 'Grass']),
+                'porcentaje_primer_saque': round(np.random.uniform(55, 75), 1),
+                'puntos_ganados_saque': round(np.random.uniform(70, 85), 1)
+            },
+            'jugador2': {
+                'ranking': np.random.randint(1, 100),
+                'victorias_año': np.random.randint(15, 45),
+                'derrotas_año': np.random.randint(5, 20),
+                'sets_ganados': np.random.randint(80, 150),
+                'superficie_favorita': np.random.choice(['Clay', 'Hard', 'Grass']),
+                'porcentaje_primer_saque': round(np.random.uniform(55, 75), 1),
+                'puntos_ganados_saque': round(np.random.uniform(70, 85), 1)
+            },
+            'enfrentamientos_directos': {
+                'victorias_j1': np.random.randint(0, 8),
+                'victorias_j2': np.random.randint(0, 8),
+                'superficie_ultima_victoria_j1': np.random.choice(['Clay', 'Hard', 'Grass'])
+            }
+        }
+
+    def analizar_partido(self, partido: Partido) -> Dict:
+        """
+        Análisis completo de un partido utilizando inteligencia artificial y estadísticas avanzadas
+        
+        Args:
+            partido (Partido): El partido a analizar
+            
+        Returns:
+            Dict: Análisis completo con probabilidades, recomendaciones y factores clave
+        """
+        logger.info(f"🔍 Analizando: {partido.equipo_local} vs {partido.equipo_visitante}")
+        
+        try:
+            # Análisis específico según el deporte
+            if partido.deporte == 'fútbol':
+                analisis = self._analizar_futbol(partido)
+            elif partido.deporte == 'basketball':
+                analisis = self._analizar_basketball(partido)
+            elif partido.deporte == 'tennis':
+                analisis = self._analizar_tennis(partido)
+            else:
+                analisis = self._analisis_generico(partido)
+            
+            # Agregar análisis de valor de las odds del mercado
+            analisis['valor_odds'] = self._calcular_valor_odds(partido, analisis)
+            
+            # Calcular nivel de confianza general del análisis
+            analisis['confianza_general'] = self._calcular_confianza(analisis)
+            
+            # Generar recomendación final inteligente
+            analisis['recomendacion'] = self._generar_recomendacion(partido, analisis)
+            
+            return analisis
+            
+        except Exception as e:
+            logger.error(f"❌ Error analizando partido: {e}")
+            return self._analisis_basico(partido)
+
+    def _evaluar_forma(self, forma_reciente: List[str]) -> float:
+        """
+        Evalúa la forma reciente de un equipo basada en sus últimos resultados
+        W = Victoria (3 puntos), D = Empate (1 punto), L = Derrota (0 puntos)
+        
+        Args:
+            forma_reciente: Lista de resultados ['W', 'D', 'L', 'W', 'D']
+            
+        Returns:
+            float: Porcentaje de forma (0-100)
+        """
+        if not forma_reciente:
+            return 50.0  # Valor neutro si no hay datos
+        
+        # AQUÍ ESTABA EL ERROR: Esta línea debe estar correctamente indentada dentro de la función
+        puntos = {'W': 3, 'D': 1, 'L': 0}
         total_puntos = sum(puntos.get(resultado, 0) for resultado in forma_reciente)
         max_puntos = len(forma_reciente) * 3
         return (total_puntos / max_puntos * 100) if max_puntos > 0 else 50.0
@@ -175,6 +572,260 @@ puntos = {'W': 3, 'D': 1, 'L': 0}
         
         return justificacion
 
+    def _analizar_futbol(self, partido: Partido) -> Dict:
+        """
+        Análisis específico y detallado para fútbol
+        Considera factores únicos del deporte como empates, ventaja local, etc.
+        """
+        stats = partido.estadisticas
+        
+        # Análisis de forma reciente (últimos 5 partidos)
+        forma_local = self._evaluar_forma(stats['local']['forma_reciente'])
+        forma_visitante = self._evaluar_forma(stats['visitante']['forma_reciente'])
+        
+        # Análisis de rendimiento en casa vs visita
+        if stats['local']['partidos_casa'] > 0:
+            rendimiento_casa = (stats['local']['victorias_casa'] / stats['local']['partidos_casa']) * 100
+        else:
+            rendimiento_casa = 50.0
+            
+        if stats['visitante']['partidos_visita'] > 0:
+            ataque_visitante = stats['visitante']['goles_favor_visita'] / stats['visitante']['partidos_visita']
+            defensa_visitante = stats['visitante']['goles_contra_visita'] / stats['visitante']['partidos_visita']
+        else:
+            ataque_visitante = 1.2
+            defensa_visitante = 1.2
+        
+        # Análisis de enfrentamientos directos históricos
+        h2h = stats['enfrentamientos_directos']['ultimos_5']
+        tendencia_h2h = self._evaluar_enfrentamientos(h2h)
+        
+        # Impacto de lesiones y suspensiones
+        impacto_lesiones_local = (stats['local']['lesionados'] + stats['local']['suspendidos']) * -5
+        impacto_lesiones_visitante = (stats['visitante']['lesionados'] + stats['visitante']['suspendidos']) * -5
+        
+        # Cálculo de probabilidades usando modelo matemático avanzado
+        prob_local = (forma_local + rendimiento_casa + (ataque_local - defensa_visitante) * 10 + 
+                     tendencia_h2h + impacto_lesiones_local + 50) / 100
+        prob_visitante = (forma_visitante + rendimiento_visita + (ataque_visitante - defensa_local) * 10 - 
+                         tendencia_h2h + impacto_lesiones_visitante + 30) / 100  # -20% por jugar fuera
+        prob_empate = max(0.15, 1 - prob_local - prob_visitante)
+        
+        # Normalización de probabilidades para que sumen 100%
+        total = prob_local + prob_visitante + prob_empate
+        if total > 0:
+            prob_local /= total
+            prob_visitante /= total
+            prob_empate /= total
+        else:
+            prob_local = 0.4
+            prob_visitante = 0.35
+            prob_empate = 0.25
+        
+        return {
+            'probabilidad_local': round(prob_local * 100, 1),
+            'probabilidad_empate': round(prob_empate * 100, 1),
+            'probabilidad_visitante': round(prob_visitante * 100, 1),
+            'forma_local': forma_local,
+            'forma_visitante': forma_visitante,
+            'rendimiento_casa': round(rendimiento_casa, 1),
+            'rendimiento_visita': round(rendimiento_visita, 1),
+            'factores_clave': [
+                f"Forma reciente: Local {forma_local}% vs Visitante {forma_visitante}%",
+                f"Rendimiento en casa: {round(rendimiento_casa, 1)}%",
+                f"Rendimiento visitante: {round(rendimiento_visita, 1)}%",
+                f"Promedio goles local: {round(ataque_local, 1)}",
+                f"Promedio goles visitante: {round(ataque_visitante, 1)}",
+                f"Lesionados/Suspendidos: Local {stats['local']['lesionados'] + stats['local']['suspendidos']}, Visitante {stats['visitante']['lesionados'] + stats['visitante']['suspendidos']}"
+            ]
+        }
+
+    def _analizar_basketball(self, partido: Partido) -> Dict:
+        """
+        Análisis específico para basketball
+        Considera factores como eficiencia ofensiva, porcentajes de tiro, etc.
+        """
+        stats = partido.estadisticas
+        
+        # Análisis de potencia ofensiva
+        puntos_local = stats['local']['puntos_promedio_casa']
+        puntos_visitante = stats['visitante']['puntos_promedio_visita']
+        
+        # Análisis de solidez defensiva
+        defensa_local = stats['local']['puntos_contra_casa']
+        defensa_visitante = stats['visitante']['puntos_contra_visita']
+        
+        # Cálculo de eficiencia (diferencial ofensivo-defensivo)
+        eficiencia_local = (puntos_local - defensa_local) / 100
+        eficiencia_visitante = (puntos_visitante - defensa_visitante) / 100
+        
+        # Porcentajes de tiro como indicador de calidad
+        tiros_local = stats['local']['porcentaje_tiros']
+        tiros_visitante = stats['visitante']['porcentaje_tiros']
+        
+        # Calcular probabilidades con ventaja local del 10%
+        factor_local = (eficiencia_local + tiros_local/100) * 0.6 + 0.1  # Ventaja casa 10%
+        factor_visitante = (eficiencia_visitante + tiros_visitante/100) * 0.5
+        
+        total = factor_local + factor_visitante
+        if total > 0:
+            prob_local = factor_local / total
+            prob_visitante = factor_visitante / total
+        else:
+            prob_local = 0.55  # Ventaja local por defecto
+            prob_visitante = 0.45
+        
+        return {
+            'probabilidad_local': round(prob_local * 100, 1),
+            'probabilidad_visitante': round(prob_visitante * 100, 1),
+            'factores_clave': [
+                f"Puntos promedio local: {puntos_local}",
+                f"Puntos promedio visitante: {puntos_visitante}",
+                f"Eficiencia local: {round(eficiencia_local, 2)}",
+                f"Eficiencia visitante: {round(eficiencia_visitante, 2)}",
+                f"% Tiros local: {tiros_local}%",
+                f"% Tiros visitante: {tiros_visitante}%"
+            ]
+        }
+
+    def _analizar_tennis(self, partido: Partido) -> Dict:
+        """
+        Análisis específico para tennis
+        Considera ranking, forma, superficie, enfrentamientos directos
+        """
+        stats = partido.estadisticas
+        
+        # Análisis de ranking (factor muy importante en tennis)
+        ranking_j1 = stats['jugador1']['ranking']
+        ranking_j2 = stats['jugador2']['ranking']
+        factor_ranking = (100 - ranking_j1) - (100 - ranking_j2)
+        
+        # Análisis de forma actual (victorias vs derrotas)
+        victorias_j1 = stats['jugador1']['victorias_año']
+        derrotas_j1 = stats['jugador1']['derrotas_año']
+        forma_j1 = victorias_j1 / (victorias_j1 + derrotas_j1) if (victorias_j1 + derrotas_j1) > 0 else 0.5
+        
+        victorias_j2 = stats['jugador2']['victorias_año']
+        derrotas_j2 = stats['jugador2']['derrotas_año']
+        forma_j2 = victorias_j2 / (victorias_j2 + derrotas_j2) if (victorias_j2 + derrotas_j2) > 0 else 0.5
+        
+        # Enfrentamientos directos (muy importante en tennis)
+        h2h_j1 = stats['enfrentamientos_directos']['victorias_j1']
+        h2h_j2 = stats['enfrentamientos_directos']['victorias_j2']
+        factor_h2h = (h2h_j1 - h2h_j2) * 5 if (h2h_j1 + h2h_j2) > 0 else 0
+        
+        # Calcular probabilidades finales
+        prob_j1 = 0.5 + (factor_ranking * 0.003) + ((forma_j1 - forma_j2) * 0.3) + (factor_h2h * 0.01)
+        prob_j1 = max(0.1, min(0.9, prob_j1))  # Limitar entre 10% y 90%
+        prob_j2 = 1 - prob_j1
+        
+        return {
+            'probabilidad_local': round(prob_j1 * 100, 1),
+            'probabilidad_visitante': round(prob_j2 * 100, 1),
+            'factores_clave': [
+                f"Ranking: #{ranking_j1} vs #{ranking_j2}",
+                f"Forma reciente: {forma_j1:.1%} vs {forma_j2:.1%}",
+                f"Enfrentamientos directos: {h2h_j1}-{h2h_j2}",
+                f"Superficie favorita: {stats['jugador1']['superficie_favorita']} vs {stats['jugador2']['superficie_favorita']}",
+                f"% Primer saque: {stats['jugador1']['porcentaje_primer_saque']}% vs {stats['jugador2']['porcentaje_primer_saque']}%"
+            ]
+        }
+
+    def _analisis_generico(self, partido: Partido) -> Dict:
+        """
+        Análisis genérico para deportes no específicamente implementados
+        
+        Args:
+            partido: Información del partido
+            
+        Returns:
+            Dict: Análisis genérico basado en odds del mercado
+        """
+        odds_local = partido.odds_local
+        odds_visitante = partido.odds_visitante
+        
+        # Convertir odds a probabilidades implícitas del mercado
+        if odds_local > 0 and odds_visitante > 0:
+            prob_local_implicita = 1 / odds_local
+            prob_visitante_implicita = 1 / odds_visitante
+            
+            # Ajustar por ventaja de casa (5% adicional)
+            prob_local = prob_local_implicita * 1.05
+            prob_visitante = prob_visitante_implicita * 0.95
+            
+            # Normalizar probabilidades
+            total = prob_local + prob_visitante
+            prob_local /= total
+            prob_visitante /= total
+        else:
+            # Valores por defecto
+            prob_local = 0.55  # Ligera ventaja local
+            prob_visitante = 0.45
+        
+        return {
+            'probabilidad_local': round(prob_local * 100, 1),
+            'probabilidad_visitante': round(prob_visitante * 100, 1),
+            'factores_clave': [
+                f"Análisis basado en odds del mercado",
+                f"Odds local: {odds_local}",
+                f"Odds visitante: {odds_visitante}",
+                f"Ventaja local aplicada: +5%"
+            ]
+        }
+
+    def _analisis_basico(self, partido: Partido) -> Dict:
+        """
+        Análisis básico de respaldo en caso de errores
+        
+        Args:
+            partido: Información básica del partido
+            
+        Returns:
+            Dict: Análisis mínimo pero funcional
+        """
+        return {
+            'probabilidad_local': 45.0,
+            'probabilidad_empate': 25.0 if partido.deporte == 'fútbol' else 0,
+            'probabilidad_visitante': 30.0 if partido.deporte == 'fútbol' else 55.0,
+            'confianza_general': 60.0,
+            'valor_odds': {
+                'valor_local': 0.0,
+                'valor_empate': 0.0,
+                'valor_visitante': 0.0,
+                'mejor_valor': ('local', 0.0)
+            },
+            'recomendacion': {
+                'recomendacion': 'ANÁLISIS PENDIENTE',
+                'odds_recomendada': 0.0,
+                'probabilidad_estimada': 0,
+                'valor_esperado': 0.0,
+                'nivel_riesgo': 'ALTO',
+                'confianza': 60.0,
+                'justificacion': 'Análisis en modo básico por limitaciones técnicas temporales.'
+            },
+            'factores_clave': ['Análisis básico activado', 'Consulte el reporte detallado más tarde']
+        }
+
+    def _generar_partidos_demo(self) -> List[Partido]:
+        """
+        Genera partidos de demostración si fallan las conexiones a APIs externas
+        
+        Returns:
+            List[Partido]: Lista de partidos demo con datos realistas
+        """
+        logger.info("🎭 Generando partidos demo para demostración...")
+        partidos_demo = []
+        
+        # Generar algunos partidos de diferentes deportes
+        fecha_inicio = datetime.now()
+        fecha_fin = fecha_inicio + timedelta(hours=12)
+        
+        partidos_demo.extend(self._obtener_partidos_futbol(fecha_inicio, fecha_fin))
+        partidos_demo.extend(self._obtener_partidos_basketball(fecha_inicio, fecha_fin))
+        partidos_demo.extend(self._obtener_partidos_tennis(fecha_inicio, fecha_fin))
+        
+        return partidos_demo
+
     def generar_reporte_completo(self) -> Dict:
         """
         Genera un reporte completo con análisis de todos los partidos disponibles
@@ -253,98 +904,6 @@ puntos = {'W': 3, 'D': 1, 'L': 0}
                 'Análisis de enfrentamientos directos',
                 'Cálculo de valor esperado',
                 'Evaluación de riesgo multi-factor'
-            ]
-        }
-
-    def _generar_partidos_demo(self) -> List[Partido]:
-        """
-        Genera partidos de demostración si fallan las conexiones a APIs externas
-        
-        Returns:
-            List[Partido]: Lista de partidos demo con datos realistas
-        """
-        logger.info("🎭 Generando partidos demo para demostración...")
-        partidos_demo = []
-        
-        # Generar algunos partidos de diferentes deportes
-        partidos_demo.extend(self._obtener_partidos_futbol(datetime.now(), datetime.now() + timedelta(hours=12)))
-        partidos_demo.extend(self._obtener_partidos_basketball(datetime.now(), datetime.now() + timedelta(hours=12)))
-        partidos_demo.extend(self._obtener_partidos_tennis(datetime.now(), datetime.now() + timedelta(hours=12)))
-        
-        return partidos_demo
-
-    def _analisis_basico(self, partido: Partido) -> Dict:
-        """
-        Análisis básico de respaldo en caso de errores
-        
-        Args:
-            partido: Información básica del partido
-            
-        Returns:
-            Dict: Análisis mínimo pero funcional
-        """
-        return {
-            'probabilidad_local': 45.0,
-            'probabilidad_empate': 25.0 if partido.deporte == 'fútbol' else 0,
-            'probabilidad_visitante': 30.0 if partido.deporte == 'fútbol' else 55.0,
-            'confianza_general': 60.0,
-            'valor_odds': {
-                'valor_local': 0.0,
-                'valor_empate': 0.0,
-                'valor_visitante': 0.0,
-                'mejor_valor': ('local', 0.0)
-            },
-            'recomendacion': {
-                'recomendacion': 'ANÁLISIS PENDIENTE',
-                'odds_recomendada': 0.0,
-                'probabilidad_estimada': 0,
-                'valor_esperado': 0.0,
-                'nivel_riesgo': 'ALTO',
-                'confianza': 60.0,
-                'justificacion': 'Análisis en modo básico por limitaciones técnicas temporales.'
-            },
-            'factores_clave': ['Análisis básico activado', 'Consulte el reporte detallado más tarde']
-        }
-
-    def _analisis_generico(self, partido: Partido) -> Dict:
-        """
-        Análisis genérico para deportes no específicamente implementados
-        
-        Args:
-            partido: Información del partido
-            
-        Returns:
-            Dict: Análisis genérico basado en odds del mercado
-        """
-        odds_local = partido.odds_local
-        odds_visitante = partido.odds_visitante
-        
-        # Convertir odds a probabilidades implícitas del mercado
-        if odds_local > 0 and odds_visitante > 0:
-            prob_local_implicita = 1 / odds_local
-            prob_visitante_implicita = 1 / odds_visitante
-            
-            # Ajustar por ventaja de casa (5% adicional)
-            prob_local = prob_local_implicita * 1.05
-            prob_visitante = prob_visitante_implicita * 0.95
-            
-            # Normalizar probabilidades
-            total = prob_local + prob_visitante
-            prob_local /= total
-            prob_visitante /= total
-        else:
-            # Valores por defecto
-            prob_local = 0.55  # Ligera ventaja local
-            prob_visitante = 0.45
-        
-        return {
-            'probabilidad_local': round(prob_local * 100, 1),
-            'probabilidad_visitante': round(prob_visitante * 100, 1),
-            'factores_clave': [
-                f"Análisis basado en odds del mercado",
-                f"Odds local: {odds_local}",
-                f"Odds visitante: {odds_visitante}",
-                f"Ventaja local aplicada: +5%"
             ]
         }
 
@@ -734,15 +1293,63 @@ def dashboard():
     </html>
     """
     
+    # Renderizar template con datos dinámicos usando una función auxiliar personalizada
+    def render_custom_template(template, **kwargs):
+        """Función auxiliar para renderizar templates sin Jinja2 completo"""
+        for key, value in kwargs.items():
+            template = template.replace('{{ ' + key + ' }}', str(value))
+        
+        # Manejar loops simples para recomendaciones
+        if top_recomendaciones:
+            rec_html = ""
+            for rec in top_recomendaciones:
+                rec_item = f"""
+                <div class="recommendation-item risk-{rec['analisis']['recomendacion']['nivel_riesgo'].lower()}">
+                    <div class="match-info">
+                        🏆 {rec['partido']['enfrentamiento']} - {rec['partido']['liga']}
+                    </div>
+                    
+                    <div class="recommendation-text">
+                        💡 {rec['analisis']['recomendacion']['recomendacion']}
+                    </div>
+                    
+                    <div class="details">
+                        📊 Valor Esperado: +{round(rec['analisis']['recomendacion']['valor_esperado'] * 100, 1)}%<br>
+                        🎯 Confianza IA: {rec['analisis']['recomendacion']['confianza']}%<br>
+                        ⚠️ Nivel de Riesgo: {rec['analisis']['recomendacion']['nivel_riesgo']}<br>
+                        💰 Odds Recomendada: {rec['analisis']['recomendacion']['odds_recomendada']}<br>
+                        📅 Fecha: {rec['partido']['fecha_hora']}
+                    </div>
+                </div>
+                """
+                rec_html += rec_item
+            
+            # Reemplazar el bloque completo de recomendaciones
+            rec_section = f"""
+            <div class="recommendations">
+                <h3>🚀 TOP RECOMENDACIONES - Mayor Valor Esperado</h3>
+                {rec_html}
+            </div>
+            """
+            template = template.replace('{% if top_recomendaciones %}', '').replace('{% endif %}', '')
+            template = template.replace('{% for rec in top_recomendaciones %}', '').replace('{% endfor %}', '')
+            template = template.replace('<div class="recommendations">', rec_section).replace('</div>\n            {% endif %}', '')
+        else:
+            # Si no hay recomendaciones, remover toda la sección
+            import re
+            pattern = r'{% if top_recomendaciones %}.*?{% endif %}'
+            template = re.sub(pattern, '', template, flags=re.DOTALL)
+        
+        return template
+    
     # Renderizar template con datos dinámicos
-    return render_template_string(
+    return render_custom_template(
         html_template,
         total_partidos=total_partidos,
         deportes_count=deportes_count,
         oportunidades=oportunidades,
         confianza_prom=confianza_prom,
-        ultima_act=ultima_act,
-        top_recomendaciones=top_recomendaciones
+        ultima_act=ultima_act
     )
 
 @app.route('/api/analisis')
@@ -1011,408 +1618,7 @@ if __name__ == '__main__':
     
     # Ejecutar aplicación
     # En producción usa debug=False para mejor rendimiento
-    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
-
-                # ASISTENTE DE ANÁLISIS DEPORTIVO PROFESIONAL v3.0 - VERSIÓN CORREGIDA
-# =====================================================================
-# Sistema completo de análisis predictivo con múltiples fuentes de datos
-
-import os
-import requests
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import logging
-import json
-from typing import Dict, List, Any
-import schedule
-import time
-from flask import Flask, jsonify, render_template_string
-from flask_cors import CORS
-import threading
-from dataclasses import dataclass
-import warnings
-warnings.filterwarnings('ignore')
-
-# Configurar logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-@dataclass
-class Partido:
-    """Clase que representa un partido deportivo con toda su información"""
-    id: str
-    deporte: str
-    liga: str
-    equipo_local: str
-    equipo_visitante: str
-    fecha_hora: datetime
-    odds_local: float
-    odds_empate: float
-    odds_visitante: float
-    estadisticas: Dict
-    prediccion: Dict
-
-class AnalizadorDeportivoProfesional:
-    """Asistente de análisis deportivo con múltiples fuentes de datos y algoritmos de IA"""
-    
-    def __init__(self):
-        logger.info("🚀 Iniciando Asistente de Análisis Deportivo Profesional v3.0")
-        
-        # Configuración de APIs disponibles (muchas tienen versiones gratuitas)
-        self.apis = {
-            'api_football': {
-                'url': 'https://v3.football.api-sports.io',
-                'headers': {'x-rapidapi-key': 'TU_API_KEY_AQUI'},
-                'limite_gratuito': 100  # requests por día
-            },
-            'sportmonks': {
-                'url': 'https://soccer.sportmonks.com/api/v2.0',
-                'token': 'TU_TOKEN_AQUI'
-            },
-            'the_odds_api': {
-                'url': 'https://api.the-odds-api.com/v4',
-                'key': 'TU_KEY_AQUI'
-            }
-        }
-        
-        # Cache para almacenar datos y optimizar rendimiento
-        self.cache_partidos = []
-        self.cache_estadisticas = {}
-        self.ultima_actualizacion = None
-        
-        # Factores de análisis con pesos específicos para cada deporte
-        self.factores_analisis = {
-            'forma_reciente': 0.30,              # 30% de peso - Rendimiento últimos partidos
-            'enfrentamientos_directos': 0.25,    # 25% de peso - Historial entre equipos
-            'estadisticas_casa_visita': 0.20,    # 20% de peso - Rendimiento en casa/visita
-            'lesiones_suspensiones': 0.15,       # 15% de peso - Bajas importantes
-            'valor_odds': 0.10                   # 10% de peso - Análisis del mercado
-        }
-        
-        # Deportes soportados por el sistema
-        self.deportes_soportados = [
-            'futbol', 'basketball', 'tennis', 'baseball', 
-            'hockey', 'americano', 'voleibol', 'handball'
-        ]
-
-    def obtener_partidos_siguientes_12h(self) -> List[Partido]:
-        """
-        Obtiene todos los partidos de las próximas 12 horas de múltiples deportes
-        
-        Returns:
-            List[Partido]: Lista de partidos con toda la información necesaria
-        """
-        logger.info("📅 Obteniendo partidos de las próximas 12 horas...")
-        
-        partidos = []
-        fecha_inicio = datetime.now()
-        fecha_fin = fecha_inicio + timedelta(hours=12)
-        
-        try:
-            # Combinar datos de múltiples deportes
-            partidos_futbol = self._obtener_partidos_futbol(fecha_inicio, fecha_fin)
-            partidos_basketball = self._obtener_partidos_basketball(fecha_inicio, fecha_fin)
-            partidos_tennis = self._obtener_partidos_tennis(fecha_inicio, fecha_fin)
-            
-            # Agregar todos los partidos a la lista principal
-            partidos.extend(partidos_futbol)
-            partidos.extend(partidos_basketball)
-            partidos.extend(partidos_tennis)
-            
-            logger.info(f"✅ {len(partidos)} partidos obtenidos exitosamente")
-            return partidos
-            
-        except Exception as e:
-            logger.error(f"❌ Error obteniendo partidos: {e}")
-            return self._generar_partidos_demo()
-
-    def _obtener_partidos_futbol(self, inicio, fin) -> List[Partido]:
-        """
-        Obtiene partidos de fútbol con datos realistas
-        En una implementación real, aquí se conectaría a las APIs de deportes
-        """
-        partidos = []
-        
-        # Ligas más importantes del mundo
-        ligas_importantes = [
-            'Liga BetPlay DIMAYOR', 'Premier League', 'La Liga', 
-            'Serie A', 'Bundesliga', 'Ligue 1', 'Copa Libertadores',
-            'Champions League', 'Europa League'
-        ]
-        
-        # Equipos colombianos más populares
-        equipos_colombia = [
-            'Atlético Nacional', 'Millonarios', 'Junior', 'América de Cali',
-            'Santa Fe', 'Deportivo Cali', 'Once Caldas', 'Medellín',
-            'Tolima', 'Pereira', 'Bucaramanga', 'Pasto'
-        ]
-        
-        # Equipos europeos de élite
-        equipos_europa = [
-            'Real Madrid', 'Barcelona', 'Manchester City', 'Liverpool',
-            'Bayern Munich', 'PSG', 'Juventus', 'AC Milan',
-            'Arsenal', 'Chelsea', 'Inter Milan', 'Atletico Madrid'
-        ]
-        
-        # Generar 6 partidos de fútbol con datos realistas
-        for i in range(6):
-            liga = np.random.choice(ligas_importantes)
-            
-            # Seleccionar equipos según la liga
-            if 'Colombia' in liga or 'BetPlay' in liga:
-                equipos = equipos_colombia
-            else:
-                equipos = equipos_europa
-            
-            local = np.random.choice(equipos)
-            visitante = np.random.choice([e for e in equipos if e != local])
-            
-            # Generar odds más realistas basadas en probabilidades del mercado
-            odds_local = round(np.random.uniform(1.5, 3.8), 2)
-            odds_visitante = round(np.random.uniform(1.5, 3.8), 2)
-            odds_empate = round(np.random.uniform(2.8, 4.2), 2)
-            
-            # Crear objeto partido con toda la información
-            partido = Partido(
-                id=f"fut_{i+1}",
-                deporte="fútbol",
-                liga=liga,
-                equipo_local=local,
-                equipo_visitante=visitante,
-                fecha_hora=inicio + timedelta(hours=np.random.randint(1, 12)),
-                odds_local=odds_local,
-                odds_empate=odds_empate,
-                odds_visitante=odds_visitante,
-                estadisticas=self._generar_estadisticas_futbol(local, visitante),
-                prediccion={}
-            )
-            
-            partidos.append(partido)
-        
-        return partidos
-
-    def _obtener_partidos_basketball(self, inicio, fin) -> List[Partido]:
-        """Obtiene partidos de basketball de diferentes ligas"""
-        partidos = []
-        
-        ligas = ['NBA', 'Liga Profesional Colombia', 'EuroLeague', 'NCAA']
-        equipos_nba = ['Lakers', 'Warriors', 'Celtics', 'Heat', 'Bulls', 'Knicks', 'Nets', 'Bucks']
-        equipos_col = ['Titanes', 'Cimarrones', 'Piratas', 'Búcaros', 'Cafeteros', 'Condores']
-        
-        # Generar 3 partidos de basketball
-        for i in range(3):
-            liga = np.random.choice(ligas)
-            equipos = equipos_nba if liga == 'NBA' else equipos_col
-            
-            local = np.random.choice(equipos)
-            visitante = np.random.choice([e for e in equipos if e != local])
-            
-            # En basketball no hay empate, solo dos opciones
-            odds_local = round(np.random.uniform(1.4, 2.8), 2)
-            odds_visitante = round(np.random.uniform(1.4, 2.8), 2)
-            
-            partido = Partido(
-                id=f"bas_{i+1}",
-                deporte="basketball",
-                liga=liga,
-                equipo_local=local,
-                equipo_visitante=visitante,
-                fecha_hora=inicio + timedelta(hours=np.random.randint(1, 12)),
-                odds_local=odds_local,
-                odds_empate=0,  # No hay empate en basketball
-                odds_visitante=odds_visitante,
-                estadisticas=self._generar_estadisticas_basketball(local, visitante),
-                prediccion={}
-            )
-            
-            partidos.append(partido)
-        
-        return partidos
-
-    def _obtener_partidos_tennis(self, inicio, fin) -> List[Partido]:
-        """Obtiene partidos de tennis de diferentes torneos"""
-        partidos = []
-        
-        torneos = ['ATP Masters', 'WTA 1000', 'Roland Garros', 'Wimbledon', 'US Open', 'Australian Open']
-        jugadores = [
-            'Djokovic', 'Nadal', 'Alcaraz', 'Medvedev', 'Tsitsipas', 
-            'Rublev', 'Zverev', 'Sinner', 'Ruud', 'Hurkacz'
-        ]
-        
-        # Generar 2 partidos de tennis
-        for i in range(2):
-            torneo = np.random.choice(torneos)
-            jugador1 = np.random.choice(jugadores)
-            jugador2 = np.random.choice([j for j in jugadores if j != jugador1])
-            
-            # En tennis tampoco hay empate
-            odds_j1 = round(np.random.uniform(1.3, 3.5), 2)
-            odds_j2 = round(np.random.uniform(1.3, 3.5), 2)
-            
-            partido = Partido(
-                id=f"ten_{i+1}",
-                deporte="tennis",
-                liga=torneo,
-                equipo_local=jugador1,
-                equipo_visitante=jugador2,
-                fecha_hora=inicio + timedelta(hours=np.random.randint(1, 12)),
-                odds_local=odds_j1,
-                odds_empate=0,  # No hay empate en tennis
-                odds_visitante=odds_j2,
-                estadisticas=self._generar_estadisticas_tennis(jugador1, jugador2),
-                prediccion={}
-            )
-            
-            partidos.append(partido)
-        
-        return partidos
-
-    def _generar_estadisticas_futbol(self, local, visitante) -> Dict:
-        """
-        Genera estadísticas realistas para fútbol basadas en datos típicos del deporte
-        
-        Returns:
-            Dict: Estadísticas completas de ambos equipos
-        """
-        return {
-            'local': {
-                'forma_reciente': [np.random.choice(['W', 'D', 'L']) for _ in range(5)],
-                'goles_favor_casa': np.random.randint(8, 25),
-                'goles_contra_casa': np.random.randint(3, 18),
-                'partidos_casa': np.random.randint(8, 15),
-                'victorias_casa': np.random.randint(4, 12),
-                'lesionados': np.random.randint(0, 4),
-                'suspendidos': np.random.randint(0, 2),
-                'posesion_promedio': round(np.random.uniform(42, 65), 1),
-                'tiros_por_partido': round(np.random.uniform(8, 18), 1)
-            },
-            'visitante': {
-                'forma_reciente': [np.random.choice(['W', 'D', 'L']) for _ in range(5)],
-                'goles_favor_visita': np.random.randint(6, 22),
-                'goles_contra_visita': np.random.randint(5, 20),
-                'partidos_visita': np.random.randint(8, 15),
-                'victorias_visita': np.random.randint(2, 10),
-                'lesionados': np.random.randint(0, 4),
-                'suspendidos': np.random.randint(0, 2),
-                'posesion_promedio': round(np.random.uniform(35, 58), 1),
-                'tiros_por_partido': round(np.random.uniform(6, 16), 1)
-            },
-            'enfrentamientos_directos': {
-                'ultimos_5': [np.random.choice(['L', 'E', 'V']) for _ in range(5)],
-                'goles_local_promedio': round(np.random.uniform(0.8, 2.5), 1),
-                'goles_visitante_promedio': round(np.random.uniform(0.6, 2.2), 1),
-                'total_partidos': np.random.randint(8, 20)
-            }
-        }
-
-    def _generar_estadisticas_basketball(self, local, visitante) -> Dict:
-        """Genera estadísticas realistas para basketball"""
-        return {
-            'local': {
-                'puntos_promedio_casa': np.random.randint(105, 125),
-                'puntos_contra_casa': np.random.randint(95, 120),
-                'victorias_casa': np.random.randint(15, 25),
-                'derrotas_casa': np.random.randint(5, 15),
-                'porcentaje_tiros': round(np.random.uniform(42, 52), 1),
-                'rebotes_promedio': round(np.random.uniform(40, 50), 1),
-                'asistencias_promedio': round(np.random.uniform(20, 30), 1)
-            },
-            'visitante': {
-                'puntos_promedio_visita': np.random.randint(100, 120),
-                'puntos_contra_visita': np.random.randint(98, 125),
-                'victorias_visita': np.random.randint(12, 22),
-                'derrotas_visita': np.random.randint(8, 18),
-                'porcentaje_tiros': round(np.random.uniform(40, 50), 1),
-                'rebotes_promedio': round(np.random.uniform(38, 48), 1),
-                'asistencias_promedio': round(np.random.uniform(18, 28), 1)
-            }
-        }
-
-    def _generar_estadisticas_tennis(self, j1, j2) -> Dict:
-        """Genera estadísticas realistas para tennis"""
-        return {
-            'jugador1': {
-                'ranking': np.random.randint(1, 100),
-                'victorias_año': np.random.randint(15, 45),
-                'derrotas_año': np.random.randint(5, 20),
-                'sets_ganados': np.random.randint(80, 150),
-                'superficie_favorita': np.random.choice(['Clay', 'Hard', 'Grass']),
-                'porcentaje_primer_saque': round(np.random.uniform(55, 75), 1),
-                'puntos_ganados_saque': round(np.random.uniform(70, 85), 1)
-            },
-            'jugador2': {
-                'ranking': np.random.randint(1, 100),
-                'victorias_año': np.random.randint(15, 45),
-                'derrotas_año': np.random.randint(5, 20),
-                'sets_ganados': np.random.randint(80, 150),
-                'superficie_favorita': np.random.choice(['Clay', 'Hard', 'Grass']),
-                'porcentaje_primer_saque': round(np.random.uniform(55, 75), 1),
-                'puntos_ganados_saque': round(np.random.uniform(70, 85), 1)
-            },
-            'enfrentamientos_directos': {
-                'victorias_j1': np.random.randint(0, 8),
-                'victorias_j2': np.random.randint(0, 8),
-                'superficie_ultima_victoria_j1': np.random.choice(['Clay', 'Hard', 'Grass'])
-            }
-        }
-
-    def analizar_partido(self, partido: Partido) -> Dict:
-        """
-        Análisis completo de un partido utilizando inteligencia artificial y estadísticas avanzadas
-        
-        Args:
-            partido (Partido): El partido a analizar
-            
-        Returns:
-            Dict: Análisis completo con probabilidades, recomendaciones y factores clave
-        """
-        logger.info(f"🔍 Analizando: {partido.equipo_local} vs {partido.equipo_visitante}")
-        
-        try:
-            # Análisis específico según el deporte
-            if partido.deporte == 'fútbol':
-                analisis = self._analizar_futbol(partido)
-            elif partido.deporte == 'basketball':
-                analisis = self._analizar_basketball(partido)
-            elif partido.deporte == 'tennis':
-                analisis = self._analizar_tennis(partido)
-            else:
-                analisis = self._analisis_generico(partido)
-            
-            # Agregar análisis de valor de las odds del mercado
-            analisis['valor_odds'] = self._calcular_valor_odds(partido, analisis)
-            
-            # Calcular nivel de confianza general del análisis
-            analisis['confianza_general'] = self._calcular_confianza(analisis)
-            
-            # Generar recomendación final inteligente
-            analisis['recomendacion'] = self._generar_recomendacion(partido, analisis)
-            
-            return analisis
-            
-        except Exception as e:
-            logger.error(f"❌ Error analizando partido: {e}")
-            return self._analisis_basico(partido)
-
-    def _analizar_futbol(self, partido: Partido) -> Dict:
-        """
-        Análisis específico y detallado para fútbol
-        Considera factores únicos del deporte como empates, ventaja local, etc.
-        """
-        stats = partido.estadisticas
-        
-        # Análisis de forma reciente (últimos 5 partidos)
-        forma_local = self._evaluar_forma(stats['local']['forma_reciente'])
-        forma_visitante = self._evaluar_forma(stats['visitante']['forma_reciente'])
-        
-        # Análisis de rendimiento en casa vs visita
-        if stats['local']['partidos_casa'] > 0:
-            rendimiento_casa = (stats['local']['victorias_casa'] / stats['local']['partidos_casa']) * 100
-        else:
-            rendimiento_casa = 50.0
-            
-        if stats['visitante']['partidos_visita'] > 0:
+    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)visita'] > 0:
             rendimiento_visita = (stats['visitante']['victorias_visita'] / stats['visitante']['partidos_visita']) * 100
         else:
             rendimiento_visita = 30.0  # Penalización por jugar fuera
@@ -1425,161 +1631,4 @@ class AnalizadorDeportivoProfesional:
             ataque_local = 1.5
             defensa_local = 1.0
             
-        if stats['visitante']['partidos_visita'] > 0:
-            ataque_visitante = stats['visitante']['goles_favor_visita'] / stats['visitante']['partidos_visita']
-            defensa_visitante = stats['visitante']['goles_contra_visita'] / stats['visitante']['partidos_visita']
-        else:
-            ataque_visitante = 1.2
-            defensa_visitante = 1.2
-        
-        # Análisis de enfrentamientos directos históricos
-        h2h = stats['enfrentamientos_directos']['ultimos_5']
-        tendencia_h2h = self._evaluar_enfrentamientos(h2h)
-        
-        # Impacto de lesiones y suspensiones
-        impacto_lesiones_local = (stats['local']['lesionados'] + stats['local']['suspendidos']) * -5
-        impacto_lesiones_visitante = (stats['visitante']['lesionados'] + stats['visitante']['suspendidos']) * -5
-        
-        # Cálculo de probabilidades usando modelo matemático avanzado
-        prob_local = (forma_local + rendimiento_casa + (ataque_local - defensa_visitante) * 10 + 
-                     tendencia_h2h + impacto_lesiones_local + 50) / 100
-        prob_visitante = (forma_visitante + rendimiento_visita + (ataque_visitante - defensa_local) * 10 - 
-                         tendencia_h2h + impacto_lesiones_visitante + 30) / 100  # -20% por jugar fuera
-        prob_empate = max(0.15, 1 - prob_local - prob_visitante)
-        
-        # Normalización de probabilidades para que sumen 100%
-        total = prob_local + prob_visitante + prob_empate
-        if total > 0:
-            prob_local /= total
-            prob_visitante /= total
-            prob_empate /= total
-        else:
-            prob_local = 0.4
-            prob_visitante = 0.35
-            prob_empate = 0.25
-        
-        return {
-            'probabilidad_local': round(prob_local * 100, 1),
-            'probabilidad_empate': round(prob_empate * 100, 1),
-            'probabilidad_visitante': round(prob_visitante * 100, 1),
-            'forma_local': forma_local,
-            'forma_visitante': forma_visitante,
-            'rendimiento_casa': round(rendimiento_casa, 1),
-            'rendimiento_visita': round(rendimiento_visita, 1),
-            'factores_clave': [
-                f"Forma reciente: Local {forma_local}% vs Visitante {forma_visitante}%",
-                f"Rendimiento en casa: {round(rendimiento_casa, 1)}%",
-                f"Rendimiento visitante: {round(rendimiento_visita, 1)}%",
-                f"Promedio goles local: {round(ataque_local, 1)}",
-                f"Promedio goles visitante: {round(ataque_visitante, 1)}",
-                f"Lesionados/Suspendidos: Local {stats['local']['lesionados'] + stats['local']['suspendidos']}, Visitante {stats['visitante']['lesionados'] + stats['visitante']['suspendidos']}"
-            ]
-        }
-
-    def _analizar_basketball(self, partido: Partido) -> Dict:
-        """
-        Análisis específico para basketball
-        Considera factores como eficiencia ofensiva, porcentajes de tiro, etc.
-        """
-        stats = partido.estadisticas
-        
-        # Análisis de potencia ofensiva
-        puntos_local = stats['local']['puntos_promedio_casa']
-        puntos_visitante = stats['visitante']['puntos_promedio_visita']
-        
-        # Análisis de solidez defensiva
-        defensa_local = stats['local']['puntos_contra_casa']
-        defensa_visitante = stats['visitante']['puntos_contra_visita']
-        
-        # Cálculo de eficiencia (diferencial ofensivo-defensivo)
-        eficiencia_local = (puntos_local - defensa_local) / 100
-        eficiencia_visitante = (puntos_visitante - defensa_visitante) / 100
-        
-        # Porcentajes de tiro como indicador de calidad
-        tiros_local = stats['local']['porcentaje_tiros']
-        tiros_visitante = stats['visitante']['porcentaje_tiros']
-        
-        # Calcular probabilidades con ventaja local del 10%
-        factor_local = (eficiencia_local + tiros_local/100) * 0.6 + 0.1  # Ventaja casa 10%
-        factor_visitante = (eficiencia_visitante + tiros_visitante/100) * 0.5
-        
-        total = factor_local + factor_visitante
-        if total > 0:
-            prob_local = factor_local / total
-            prob_visitante = factor_visitante / total
-        else:
-            prob_local = 0.55  # Ventaja local por defecto
-            prob_visitante = 0.45
-        
-        return {
-            'probabilidad_local': round(prob_local * 100, 1),
-            'probabilidad_visitante': round(prob_visitante * 100, 1),
-            'factores_clave': [
-                f"Puntos promedio local: {puntos_local}",
-                f"Puntos promedio visitante: {puntos_visitante}",
-                f"Eficiencia local: {round(eficiencia_local, 2)}",
-                f"Eficiencia visitante: {round(eficiencia_visitante, 2)}",
-                f"% Tiros local: {tiros_local}%",
-                f"% Tiros visitante: {tiros_visitante}%"
-            ]
-        }
-
-    def _analizar_tennis(self, partido: Partido) -> Dict:
-        """
-        Análisis específico para tennis
-        Considera ranking, forma, superficie, enfrentamientos directos
-        """
-        stats = partido.estadisticas
-        
-        # Análisis de ranking (factor muy importante en tennis)
-        ranking_j1 = stats['jugador1']['ranking']
-        ranking_j2 = stats['jugador2']['ranking']
-        factor_ranking = (100 - ranking_j1) - (100 - ranking_j2)
-        
-        # Análisis de forma actual (victorias vs derrotas)
-        victorias_j1 = stats['jugador1']['victorias_año']
-        derrotas_j1 = stats['jugador1']['derrotas_año']
-        forma_j1 = victorias_j1 / (victorias_j1 + derrotas_j1) if (victorias_j1 + derrotas_j1) > 0 else 0.5
-        
-        victorias_j2 = stats['jugador2']['victorias_año']
-        derrotas_j2 = stats['jugador2']['derrotas_año']
-        forma_j2 = victorias_j2 / (victorias_j2 + derrotas_j2) if (victorias_j2 + derrotas_j2) > 0 else 0.5
-        
-        # Enfrentamientos directos (muy importante en tennis)
-        h2h_j1 = stats['enfrentamientos_directos']['victorias_j1']
-        h2h_j2 = stats['enfrentamientos_directos']['victorias_j2']
-        factor_h2h = (h2h_j1 - h2h_j2) * 5 if (h2h_j1 + h2h_j2) > 0 else 0
-        
-        # Análisis de superficie (algunos jugadores son especialistas)
-        superficie_j1 = stats['jugador1']['superficie_favorita']
-        superficie_j2 = stats['jugador2']['superficie_favorita']
-        
-        # Calcular probabilidades finales
-        prob_j1 = 0.5 + (factor_ranking * 0.003) + ((forma_j1 - forma_j2) * 0.3) + (factor_h2h * 0.01)
-        prob_j1 = max(0.1, min(0.9, prob_j1))  # Limitar entre 10% y 90%
-        prob_j2 = 1 - prob_j1
-        
-        return {
-            'probabilidad_local': round(prob_j1 * 100, 1),
-            'probabilidad_visitante': round(prob_j2 * 100, 1),
-            'factores_clave': [
-                f"Ranking: #{ranking_j1} vs #{ranking_j2}",
-                f"Forma reciente: {forma_j1:.1%} vs {forma_j2:.1%}",
-                f"Enfrentamientos directos: {h2h_j1}-{h2h_j2}",
-                f"Superficie favorita: {superficie_j1} vs {superficie_j2}",
-                f"% Primer saque: {stats['jugador1']['porcentaje_primer_saque']}% vs {stats['jugador2']['porcentaje_primer_saque']}%"
-            ]
-        }
-
-    def _evaluar_forma(self, forma_reciente: List[str]) -> float:
-        """
-        Evalúa la forma reciente de un equipo basada en sus últimos resultados
-        W = Victoria (3 puntos), D = Empate (1 punto), L = Derrota (0 puntos)
-        
-        Args:
-            forma_reciente: Lista de resultados ['W', 'D', 'L', 'W', 'D']
-            
-        Returns:
-            float: Porcentaje de forma (0-100)
-        """
-        
+        if stats['visitante']['partidos_
