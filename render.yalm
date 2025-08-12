@@ -2,10 +2,13 @@ services:
   - type: web
     name: trading-bot-backend
     env: python
+    region: ohio  # o la región más cercana a ti
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.16
+        value: 3.9.18
+      - key: PIP_VERSION
+        value: 23.1.2
     healthCheckPath: /health
     autoDeploy: true
