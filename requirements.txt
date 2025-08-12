@@ -1,8 +1,8 @@
 Flask==2.3.3
 Flask-CORS==4.0.0
 requests==2.31.0
-pandas==1.5.3  # Versión más estable para evitar errores de compilación
 numpy==1.24.3
+pandas==1.5.3  # Versión más estable que evita problemas de compilación
 schedule==1.2.0
 pytz==2023.3
 python-dotenv==1.0.0
