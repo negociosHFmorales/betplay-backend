@@ -1,9 +1,9 @@
-Flask==2.3.3
-Flask-CORS==4.0.0
-requests==2.31.0
-numpy==1.24.3
-pandas==1.5.3  # Versión más estable que evita problemas de compilación
-schedule==1.2.0
-pytz==2023.3
-python-dotenv==1.0.0
+Flask==3.0.0
+Flask-CORS==4.0.1
+requests==2.32.3
+pandas==2.2.3
+numpy==1.26.4
+python-dateutil==2.9.0
+pytz==2024.1
+schedule==1.2.2
 gunicorn==21.2.0
